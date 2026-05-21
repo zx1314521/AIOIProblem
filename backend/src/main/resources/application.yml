@@ -1,0 +1,32 @@
+spring:
+  application:
+    name: aioi-problem
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/aioi_problem}
+    username: ${DATABASE_USERNAME:aioi}
+    password: ${DATABASE_PASSWORD:aioi_password}
+  jpa:
+    hibernate:
+      ddl-auto: validate
+    open-in-view: false
+  flyway:
+    enabled: true
+
+server:
+  port: ${SERVER_PORT:8080}
+
+aioi:
+  jwt:
+    secret: ${AIOI_JWT_SECRET:change-this-development-secret-change-this}
+    expiration-minutes: ${AIOI_JWT_EXPIRATION_MINUTES:10080}
+  ai:
+    provider: ${AIOI_AI_PROVIDER:mock}
+    deepseek:
+      api-key: ${DEEPSEEK_API_KEY:}
+      base-url: ${DEEPSEEK_BASE_URL:https://api.deepseek.com/chat/completions}
+      model: ${DEEPSEEK_MODEL:deepseek-chat}
+      timeout-seconds: ${DEEPSEEK_TIMEOUT_SECONDS:45}
+    codex:
+      command: ${CODEX_CLI_COMMAND:codex}
+      timeout-seconds: ${CODEX_TIMEOUT_SECONDS:60}
+

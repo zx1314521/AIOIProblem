@@ -1,0 +1,26 @@
+spring:
+  datasource:
+    url: jdbc:h2:mem:aioi;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH
+    username: sa
+    password:
+  jpa:
+    hibernate:
+      ddl-auto: create-drop
+  flyway:
+    enabled: false
+
+aioi:
+  jwt:
+    secret: test-secret-test-secret-test-secret-test-secret
+    expiration-minutes: 60
+  ai:
+    provider: mock
+    deepseek:
+      api-key:
+      base-url: http://localhost
+      model: deepseek-chat
+      timeout-seconds: 1
+    codex:
+      command: codex
+      timeout-seconds: 1
+
