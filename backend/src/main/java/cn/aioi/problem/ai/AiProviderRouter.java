@@ -1,8 +1,10 @@
 package cn.aioi.problem.ai;
 
 import org.springframework.stereotype.Service;
+import org.springframework.context.annotation.Primary;
 
 @Service
+@Primary
 public class AiProviderRouter implements AiProvider {
     private final AiProperties properties;
     private final RuleBasedAiProvider ruleBased;
