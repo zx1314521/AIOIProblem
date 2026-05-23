@@ -1,0 +1,131 @@
+package cn.aioi.problem.service;
+
+import cn.aioi.problem.ai.AiProperties;
+import cn.aioi.problem.ai.AiRuntimeSettings;
+import cn.aioi.problem.api.dto.SettingsDtos;
+import cn.aioi.problem.domain.AiSettings;
+import cn.aioi.problem.repository.AiSettingsRepository;
+import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
+
+@Service
+public class AiSettingsService {
+    private static final long SETTINGS_ID = 1L;
+
+    private final AiSettingsRepository settingsRepository;
+    private final AiProperties properties;
+
+    public AiSettingsService(AiSettingsRepository settingsRepository, AiProperties properties) {
+        this.settingsRepository = settingsRepository;
+        this.properties = properties;
+    }
+
+    @Transactional(readOnly = true)
+    public SettingsDtos.AiSettingsResponse getSettings() {
+        return toResponse(loadSettings());
+    }
+
+    @Transactional
+    public SettingsDtos.AiSettingsResponse update(SettingsDtos.AiSettingsRequest request) {
+        AiSettings settings = loadSettings();
+        settings.update(
+                normalizeProvider(request.provider()),
+                clean(request.deepSeekApiKey()),
+                defaultString(request.deepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
+                defaultString(request.deepSeekModel(), defaultDeepSeekModel()),
+                request.deepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : request.deepSeekTimeoutSeconds(),
+                defaultString(request.codexCommand(), defaultCodexCommand()),
+                request.codexTimeoutSeconds() == null ? defaultCodexTimeout() : request.codexTimeoutSeconds()
+        );
+        return toResponse(settingsRepository.save(settings));
+    }
+
+    @Transactional(readOnly = true)
+    public AiRuntimeSettings runtimeSettings() {
+        AiSettings settings = loadSettings();
+        return new AiRuntimeSettings(
+                normalizeProvider(settings.getProvider()),
+                clean(settings.getDeepSeekApiKey()),
+                defaultString(settings.getDeepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
+                defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
+                settings.getDeepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : settings.getDeepSeekTimeoutSeconds(),
+                defaultString(settings.getCodexCommand(), defaultCodexCommand()),
+                settings.getCodexTimeoutSeconds() == null ? defaultCodexTimeout() : settings.getCodexTimeoutSeconds()
+        );
+    }
+
+    private AiSettings loadSettings() {
+        return settingsRepository.findById(SETTINGS_ID).orElseGet(() -> settingsRepository.save(new AiSettings(
+                SETTINGS_ID,
+                normalizeProvider(properties.provider()),
+                defaultDeepSeekApiKey(),
+                defaultDeepSeekBaseUrl(),
+                defaultDeepSeekModel(),
+                defaultDeepSeekTimeout(),
+                defaultCodexCommand(),
+                defaultCodexTimeout()
+        )));
+    }
+
+    private SettingsDtos.AiSettingsResponse toResponse(AiSettings settings) {
+        AiRuntimeSettings runtime = new AiRuntimeSettings(
+                normalizeProvider(settings.getProvider()),
+                clean(settings.getDeepSeekApiKey()),
+                defaultString(settings.getDeepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
+                defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
+                settings.getDeepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : settings.getDeepSeekTimeoutSeconds(),
+                defaultString(settings.getCodexCommand(), defaultCodexCommand()),
+                settings.getCodexTimeoutSeconds() == null ? defaultCodexTimeout() : settings.getCodexTimeoutSeconds()
+        );
+        return new SettingsDtos.AiSettingsResponse(
+                runtime.provider(),
+                runtime.deepSeekApiKey(),
+                runtime.deepSeekBaseUrl(),
+                runtime.deepSeekModel(),
+                runtime.deepSeekTimeoutSeconds(),
+                runtime.codexCommand(),
+                runtime.codexTimeoutSeconds()
+        );
+    }
+
+    private String normalizeProvider(String provider) {
+        String value = defaultString(provider, "codex").toLowerCase();
+        return switch (value) {
+            case "deepseek", "mock", "codex" -> value;
+            default -> "codex";
+        };
+    }
+
+    private String defaultDeepSeekApiKey() {
+        return properties.deepseek() == null ? "" : clean(properties.deepseek().apiKey());
+    }
+
+    private String defaultDeepSeekBaseUrl() {
+        return properties.deepseek() == null ? "https://api.deepseek.com/chat/completions" : defaultString(properties.deepseek().baseUrl(), "https://api.deepseek.com/chat/completions");
+    }
+
+    private String defaultDeepSeekModel() {
+        return properties.deepseek() == null ? "deepseek-chat" : defaultString(properties.deepseek().model(), "deepseek-chat");
+    }
+
+    private int defaultDeepSeekTimeout() {
+        return properties.deepseek() == null ? 45 : Math.max(5, properties.deepseek().timeoutSeconds());
+    }
+
+    private String defaultCodexCommand() {
+        return properties.codex() == null ? "codex" : defaultString(properties.codex().command(), "codex");
+    }
+
+    private int defaultCodexTimeout() {
+        return properties.codex() == null ? 60 : Math.max(5, properties.codex().timeoutSeconds());
+    }
+
+    private String defaultString(String value, String fallback) {
+        return value == null || value.isBlank() ? fallback : value.trim();
+    }
+
+    private String clean(String value) {
+        return value == null ? "" : value.trim();
+    }
+}
+

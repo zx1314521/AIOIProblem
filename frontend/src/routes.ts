@@ -5,6 +5,8 @@ import ProblemsView from './views/ProblemsView.vue'
 import ProblemSetsView from './views/ProblemSetsView.vue'
 import RecommendationsView from './views/RecommendationsView.vue'
 import PassedView from './views/PassedView.vue'
+import BatchJobsView from './views/BatchJobsView.vue'
+import SettingsView from './views/SettingsView.vue'
 import { authState } from './services/auth'
 
 export const routes: RouteRecordRaw[] = [
@@ -13,8 +15,10 @@ export const routes: RouteRecordRaw[] = [
   { path: '/analysis', component: AnalysisView },
   { path: '/problems', component: ProblemsView },
   { path: '/sets', component: ProblemSetsView },
+  { path: '/batch', component: BatchJobsView },
   { path: '/recommendations', component: RecommendationsView },
-  { path: '/passed', component: PassedView }
+  { path: '/passed', component: PassedView },
+  { path: '/settings', component: SettingsView }
 ]
 
 export function requireAuth(path: string) {
@@ -23,4 +27,3 @@ export function requireAuth(path: string) {
   }
   return path
 }
-

@@ -59,3 +59,38 @@ export interface RecommendationItem {
   practiceOrder: number
 }
 
+export interface AiSettings {
+  provider: 'codex' | 'deepseek' | 'mock'
+  deepSeekApiKey: string
+  deepSeekBaseUrl: string
+  deepSeekModel: string
+  deepSeekTimeoutSeconds: number
+  codexCommand: string
+  codexTimeoutSeconds: number
+}
+
+export interface BatchJob {
+  id: number
+  name: string
+  status: 'RUNNING' | 'PAUSED' | 'COMPLETED' | 'FAILED'
+  totalCount: number
+  successCount: number
+  failedCount: number
+  pendingCount: number
+  runningCount: number
+  createdAt: string
+}
+
+export interface BatchItem {
+  id: number
+  title: string
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  problemId?: number
+  errorMessage?: string
+  createdAt: string
+}
+
+export interface BatchJobDetail {
+  job: BatchJob
+  items: BatchItem[]
+}

@@ -51,6 +51,34 @@ public class DeepSeekAiProvider {
         return parser.parse(response == null ? "{}" : response);
     }
 
+    public AiAssessment assess(ProblemInput input, AiRuntimeSettings settings) {
+        if (settings.deepSeekApiKey() == null || settings.deepSeekApiKey().isBlank()) {
+            throw new IllegalStateException("DeepSeek API Key 未配置");
+        }
+        SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
+        requestFactory.setConnectTimeout(Duration.ofSeconds(Math.max(1, settings.deepSeekTimeoutSeconds())));
+        requestFactory.setReadTimeout(Duration.ofSeconds(Math.max(1, settings.deepSeekTimeoutSeconds())));
+        RestClient client = RestClient.builder()
+                .baseUrl(settings.deepSeekBaseUrl())
+                .requestFactory(requestFactory)
+                .build();
+        Map<String, Object> body = Map.of(
+                "model", settings.deepSeekModel(),
+                "messages", List.of(
+                        Map.of("role", "system", "content", systemPrompt()),
+                        Map.of("role", "user", "content", input.title() + "\n\n" + input.text())
+                ),
+                "temperature", 0.2
+        );
+        String response = client.post()
+                .contentType(MediaType.APPLICATION_JSON)
+                .header("Authorization", "Bearer " + settings.deepSeekApiKey())
+                .body(body)
+                .retrieve()
+                .body(String.class);
+        return parser.parse(response == null ? "{}" : response);
+    }
+
     private String systemPrompt() {
         return """
                 你是信息学竞赛题目分析器。只输出 JSON，不要 Markdown。

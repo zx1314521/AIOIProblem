@@ -160,6 +160,11 @@ button {
   grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
 }
 
+.grid.sidebar-main {
+  grid-template-columns: 320px minmax(0, 1fr);
+  align-items: start;
+}
+
 .field {
   display: grid;
   gap: 7px;
@@ -323,8 +328,8 @@ button {
   }
 
   .grid.two,
+  .grid.sidebar-main,
   .toolbar {
     grid-template-columns: 1fr;
   }
 }
-

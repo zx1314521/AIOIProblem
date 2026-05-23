@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { BrainCircuit, ClipboardList, LogOut, Search, Sparkles, SquareCheckBig, UploadCloud } from 'lucide-vue-next'
+import { BrainCircuit, ClipboardList, ListChecks, LogOut, Search, Settings, Sparkles, SquareCheckBig, UploadCloud } from 'lucide-vue-next'
 import { authState, clearAuth } from './services/auth'
 import { requireAuth } from './routes'
 
@@ -40,8 +40,10 @@ function logout() {
         <RouterLink to="/analysis"><UploadCloud :size="18" />题面分析</RouterLink>
         <RouterLink to="/problems"><Search :size="18" />题目搜索</RouterLink>
         <RouterLink to="/sets"><ClipboardList :size="18" />题单管理</RouterLink>
+        <RouterLink to="/batch"><ListChecks :size="18" />批量任务</RouterLink>
         <RouterLink to="/recommendations"><Sparkles :size="18" />AI推荐</RouterLink>
         <RouterLink to="/passed"><SquareCheckBig :size="18" />通过记录</RouterLink>
+        <RouterLink to="/settings"><Settings :size="18" />AI设置</RouterLink>
       </nav>
 
       <div class="sidebar-footer">
@@ -60,4 +62,3 @@ function logout() {
     </section>
   </main>
 </template>
-

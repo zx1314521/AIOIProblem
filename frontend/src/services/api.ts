@@ -1,5 +1,5 @@
 import { authState, clearAuth } from './auth'
-import type { AnalysisResponse, AuthResponse, Problem, ProblemSet, RecommendationResponse } from '../types'
+import type { AiSettings, AnalysisResponse, AuthResponse, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse } from '../types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers)
@@ -53,5 +53,18 @@ export const api = {
   removeProblemFromSet: (setId: number, problemId: number) =>
     request<ProblemSet>(`/api/problem-sets/${setId}/items/${problemId}`, { method: 'DELETE' }),
   recommendations: () => request<RecommendationResponse>('/api/recommendations')
+  ,
+  getAiSettings: () => request<AiSettings>('/api/settings/ai'),
+  updateAiSettings: (settings: AiSettings) =>
+    request<AiSettings>('/api/settings/ai', { method: 'PUT', body: JSON.stringify(settings) }),
+  uploadBatch: (name: string, files: File[]) => {
+    const data = new FormData()
+    if (name) data.append('name', name)
+    files.forEach(file => data.append('files', file))
+    return request<BatchJobDetail>('/api/batch-jobs', { method: 'POST', body: data })
+  },
+  listBatchJobs: () => request<BatchJob[]>('/api/batch-jobs'),
+  getBatchJob: (id: number) => request<BatchJobDetail>(`/api/batch-jobs/${id}`),
+  pauseBatchJob: (id: number) => request<BatchJob>(`/api/batch-jobs/${id}/pause`, { method: 'POST' }),
+  resumeBatchJob: (id: number) => request<BatchJob>(`/api/batch-jobs/${id}/resume`, { method: 'POST' })
 }
-

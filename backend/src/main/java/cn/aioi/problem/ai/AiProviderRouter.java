@@ -2,18 +2,19 @@ package cn.aioi.problem.ai;
 
 import org.springframework.stereotype.Service;
 import org.springframework.context.annotation.Primary;
+import cn.aioi.problem.service.AiSettingsService;
 
 @Service
 @Primary
 public class AiProviderRouter implements AiProvider {
-    private final AiProperties properties;
+    private final AiSettingsService settingsService;
     private final RuleBasedAiProvider ruleBased;
     private final DeepSeekAiProvider deepSeek;
     private final CodexCliAiProvider codexCli;
 
-    public AiProviderRouter(AiProperties properties, RuleBasedAiProvider ruleBased,
+    public AiProviderRouter(AiSettingsService settingsService, RuleBasedAiProvider ruleBased,
                             DeepSeekAiProvider deepSeek, CodexCliAiProvider codexCli) {
-        this.properties = properties;
+        this.settingsService = settingsService;
         this.ruleBased = ruleBased;
         this.deepSeek = deepSeek;
         this.codexCli = codexCli;
@@ -22,10 +23,10 @@ public class AiProviderRouter implements AiProvider {
     @Override
     public AiAssessment assess(ProblemInput input) {
         try {
-            String provider = properties.provider() == null ? "mock" : properties.provider().trim().toLowerCase();
-            return switch (provider) {
-                case "deepseek" -> deepSeek.assess(input);
-                case "codex" -> codexCli.assess(input);
+            AiRuntimeSettings settings = settingsService.runtimeSettings();
+            return switch (settings.provider()) {
+                case "deepseek" -> deepSeek.assess(input, settings);
+                case "codex" -> codexCli.assess(input, settings);
                 default -> ruleBased.assess(input);
             };
         } catch (RuntimeException exception) {
