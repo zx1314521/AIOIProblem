@@ -279,10 +279,6 @@ onUnmounted(() => {
           <span v-if="batchFiles.length > 1" class="status">{{ batchFiles.length }} 个文件待入队</span>
         </div>
 
-        <label v-if="batchFiles.length > 1" class="field compact-field">
-          <span>任务名</span>
-          <input v-model="batchName" class="input" />
-        </label>
         <div v-if="batchFiles.length > 1" class="actions">
           <button class="primary" type="button" :disabled="uploading || batchFiles.length === 0" @click="uploadBatch">
             上传并加入队列
@@ -501,10 +497,6 @@ onUnmounted(() => {
 
 .batch-picker {
   width: max-content;
-}
-
-.compact-field {
-  max-width: 360px;
 }
 
 .editor {
