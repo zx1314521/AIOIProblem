@@ -420,21 +420,24 @@ onUnmounted(() => {
 <style scoped>
 .analysis-workbench {
   display: grid;
-  grid-template-columns: minmax(360px, 0.95fr) 300px minmax(360px, 1.05fr);
+  grid-template-columns: minmax(0, 0.9fr) minmax(220px, 260px) minmax(0, 1.1fr);
   gap: 18px;
   align-items: start;
+  min-width: 0;
 }
 
 .task-rail,
 .preview-panel {
   max-height: calc(100vh - 120px);
   overflow: auto;
+  min-width: 0;
 }
 
 .analysis-card,
 .task-rail,
 .preview-panel {
   border-color: #d8e1d9;
+  min-width: 0;
 }
 
 .rail-header,
@@ -459,7 +462,7 @@ onUnmounted(() => {
 
 .status-filters {
   display: grid;
-  grid-template-columns: repeat(5, minmax(0, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(52px, 1fr));
   gap: 6px;
   margin: 14px 0 12px;
 }
@@ -485,7 +488,8 @@ onUnmounted(() => {
 
 .filter-chip span {
   font-size: 12px;
-  white-space: nowrap;
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .filter-chip strong {
@@ -553,6 +557,7 @@ onUnmounted(() => {
   gap: 7px;
   align-items: baseline;
   min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .queue-item strong span {
@@ -621,7 +626,7 @@ onUnmounted(() => {
 }
 
 .batch-picker {
-  width: max-content;
+  max-width: 100%;
 }
 
 .editor {
