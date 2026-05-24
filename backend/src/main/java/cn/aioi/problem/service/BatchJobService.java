@@ -276,6 +276,7 @@ public class BatchJobService {
     }
 
     private BatchDtos.BatchItemResponse toItemResponse(BatchJobItem item) {
+        Optional<Problem> problem = item.getProblemId() == null ? Optional.empty() : problems.findById(item.getProblemId());
         return new BatchDtos.BatchItemResponse(
                 item.getId(),
                 item.getTitle(),
@@ -283,6 +284,9 @@ public class BatchJobService {
                 item.getStatus().name(),
                 item.getSortOrder(),
                 item.getProblemId(),
+                problem.map(value -> value.getDifficulty().label()).orElse(null),
+                problem.map(value -> value.getDifficulty().name()).orElse(null),
+                problem.map(value -> value.getTags().stream().sorted().toList()).orElse(List.of()),
                 item.getErrorMessage(),
                 item.getCreatedAt()
         );

@@ -88,6 +88,9 @@ export interface BatchItem {
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
   sortOrder: number
   problemId?: number
+  difficulty?: string
+  difficultyCode?: DifficultyCode
+  tags: string[]
   errorMessage?: string
   createdAt: string
 }

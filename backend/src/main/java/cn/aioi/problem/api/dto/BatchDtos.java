@@ -30,6 +30,9 @@ public final class BatchDtos {
             String status,
             int sortOrder,
             Long problemId,
+            String difficulty,
+            String difficultyCode,
+            List<String> tags,
             String errorMessage,
             Instant createdAt
     ) {
