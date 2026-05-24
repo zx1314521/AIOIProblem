@@ -19,4 +19,23 @@ class CodexCliAiProviderTest {
 
         assertThat(resolved).isEqualTo(cmd.toString());
     }
+
+    @Test
+    void skipsExtensionlessTemporaryShimAndKeepsSearching(@TempDir Path tempDir) throws Exception {
+        Path temporaryShim = tempDir.resolve("tmp").resolve("arg0").resolve("codex-wrapper");
+        Path npmBin = tempDir.resolve("npm");
+        Files.createDirectories(temporaryShim);
+        Files.createDirectories(npmBin);
+        Files.writeString(temporaryShim.resolve("codex"), "temporary extensionless shim");
+        Path cmd = npmBin.resolve("codex.cmd");
+        Files.writeString(cmd, "@echo off");
+
+        String resolved = CodexCliAiProvider.resolveExecutable(
+                "codex",
+                temporaryShim + ";" + npmBin,
+                "Windows 11"
+        );
+
+        assertThat(resolved).isEqualTo(cmd.toString());
+    }
 }

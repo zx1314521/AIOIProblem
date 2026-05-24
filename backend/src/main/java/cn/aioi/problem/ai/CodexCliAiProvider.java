@@ -91,7 +91,8 @@ public class CodexCliAiProvider {
         }
         Path direct = Paths.get(command);
         if (command.contains("\\") || command.contains("/")) {
-            return resolveWindowsSibling(direct);
+            String resolved = resolveWindowsSibling(direct);
+            return resolved.isBlank() ? command : resolved;
         }
         if (pathValue == null || pathValue.isBlank()) {
             return command;
@@ -101,7 +102,7 @@ public class CodexCliAiProvider {
                 continue;
             }
             String resolved = resolveWindowsSibling(Paths.get(entry).resolve(command));
-            if (!resolved.equals(command)) {
+            if (!resolved.isBlank()) {
                 return resolved;
             }
         }
@@ -120,10 +121,7 @@ public class CodexCliAiProvider {
                 return withExtension.toString();
             }
         }
-        if (Files.isRegularFile(candidate) && !lower.endsWith(".ps1")) {
-            return value;
-        }
-        return candidate.toString();
+        return "";
     }
 
     private static boolean isWindows(String osName) {

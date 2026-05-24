@@ -35,7 +35,6 @@ let timer: number | undefined
 const selectedJob = computed(() => selected.value?.job)
 const queueItems = computed(() => selected.value?.items ?? [])
 const activeItems = computed(() => queueItems.value.filter(item => item.status === 'PENDING' || item.status === 'RUNNING'))
-const historyItems = computed(() => queueItems.value.filter(item => item.status === 'SUCCEEDED' || item.status === 'FAILED'))
 const previewHtml = computed(() => markdown.render(normalizeProblemMath(selectedItem.value?.content || '')))
 
 async function analyzeText() {
@@ -110,20 +109,25 @@ function toggleHint(index: number) {
 async function loadJobs(keepSelection = true) {
   try {
     jobs.value = await api.listBatchJobs()
-    if (selected.value && keepSelection) {
+    if (selected.value && keepSelection && isActiveJob(selected.value.job)) {
       const stillExists = jobs.value.some(job => job.id === selected.value?.job.id)
       if (stillExists) {
         selected.value = await api.getBatchJob(selected.value.job.id)
         if (selectedItem.value) {
-          selectedItem.value = selected.value.items.find(item => item.id === selectedItem.value?.id) ?? selectedItem.value
+          const updated = selected.value.items.find(item => item.id === selectedItem.value?.id)
+          selectedItem.value = updated && (updated.status === 'PENDING' || updated.status === 'RUNNING')
+            ? updated
+            : selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? null
         }
         return
       }
     }
     const activeJob = jobs.value.find(isActiveJob)
-    const fallbackJob = activeJob ?? jobs.value[0]
-    if (fallbackJob) {
-      await selectJob(fallbackJob.id)
+    if (activeJob) {
+      await selectJob(activeJob.id)
+    } else {
+      selected.value = null
+      selectedItem.value = null
     }
   } catch (err) {
     batchError.value = err instanceof Error ? err.message : '任务加载失败'
@@ -326,30 +330,6 @@ onUnmounted(() => {
         <p v-if="!selectedJob" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
       </div>
 
-      <div class="history-panel">
-        <div class="rail-header">
-          <h2>历史记录</h2>
-          <span class="tag">{{ historyItems.length }}</span>
-        </div>
-        <div class="history-list">
-          <button
-            v-for="item in historyItems"
-            :key="item.id"
-            class="history-item"
-            :class="{ active: selectedItem?.id === item.id, failed: item.status === 'FAILED' }"
-            type="button"
-            @click="selectItem(item)"
-          >
-            <strong>{{ item.title }}</strong>
-            <small>
-              {{ statusText(item.status) }}
-              <template v-if="item.difficulty"> · {{ item.difficulty }}</template>
-              <template v-if="item.errorMessage"> · {{ item.errorMessage }}</template>
-            </small>
-          </button>
-          <p v-if="selectedJob && historyItems.length === 0" class="status">暂无分析历史。</p>
-        </div>
-      </div>
     </aside>
 
     <section class="panel result-list preview-panel">
@@ -364,21 +344,6 @@ onUnmounted(() => {
             <button class="ghost" type="button" @click="deleteItem(selectedItem)"><Trash2 :size="16" />删除</button>
           </div>
         </header>
-
-        <section v-if="selectedItem.status === 'SUCCEEDED' || selectedItem.status === 'FAILED'" class="analysis-log">
-          <div>
-            <span class="status">日志</span>
-            <strong>{{ statusText(selectedItem.status) }}</strong>
-          </div>
-          <div v-if="selectedItem.difficulty">
-            <span class="difficulty">{{ selectedItem.difficulty }}</span>
-          </div>
-          <div v-if="selectedItem.tags?.length" class="tag-row">
-            <span v-for="tag in selectedItem.tags" :key="tag" class="tag">{{ tag }}</span>
-          </div>
-          <p v-if="selectedItem.errorMessage" class="error">{{ selectedItem.errorMessage }}</p>
-          <p v-else-if="selectedItem.problemId" class="status">已保存到题库 #{{ selectedItem.problemId }}</p>
-        </section>
 
         <div v-if="editing" class="grid">
           <input v-model="editTitle" class="input" />
@@ -522,57 +487,6 @@ onUnmounted(() => {
 .form-title {
   margin: 0;
   font-size: 22px;
-}
-
-.history-panel {
-  border-top: 1px solid #e3e7e1;
-  padding-top: 12px;
-  display: grid;
-  gap: 10px;
-}
-
-.history-list {
-  display: grid;
-  gap: 7px;
-  max-height: min(34vh, 420px);
-  overflow: auto;
-}
-
-.history-item {
-  border: 1px solid #e3e7e1;
-  border-radius: 6px;
-  background: #fbfcfa;
-  padding: 8px 9px;
-  text-align: left;
-  display: grid;
-  gap: 3px;
-}
-
-.history-item.active {
-  border-color: #1f6f54;
-  background: #eef8f2;
-}
-
-.history-item.failed {
-  border-color: #e4bbb6;
-  background: #fff6f4;
-}
-
-.history-item small {
-  color: #617069;
-  font-size: 12px;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.analysis-log {
-  border: 1px solid #dfe4dc;
-  border-radius: 6px;
-  background: #fbfcfa;
-  padding: 12px;
-  display: grid;
-  gap: 10px;
 }
 
 .file-button {

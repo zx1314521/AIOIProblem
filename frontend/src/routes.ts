@@ -1,6 +1,7 @@
 import type { RouteRecordRaw } from 'vue-router'
 import LoginView from './views/LoginView.vue'
 import AnalysisView from './views/AnalysisView.vue'
+import AnalysisHistoryView from './views/AnalysisHistoryView.vue'
 import ProblemsView from './views/ProblemsView.vue'
 import ProblemSetsView from './views/ProblemSetsView.vue'
 import RecommendationsView from './views/RecommendationsView.vue'
@@ -12,6 +13,7 @@ export const routes: RouteRecordRaw[] = [
   { path: '/', redirect: '/analysis' },
   { path: '/login', component: LoginView },
   { path: '/analysis', component: AnalysisView },
+  { path: '/history', component: AnalysisHistoryView },
   { path: '/problems', component: ProblemsView },
   { path: '/sets', component: ProblemSetsView },
   { path: '/batch', redirect: '/analysis' },
