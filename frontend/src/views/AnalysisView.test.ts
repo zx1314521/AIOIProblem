@@ -107,6 +107,10 @@ beforeEach(() => {
   vi.clearAllMocks()
 })
 
+afterEach(() => {
+  vi.useRealTimers()
+})
+
 test('starts single analysis by enqueueing it as a task', async () => {
   vi.mocked(api.listBatchJobs).mockResolvedValue([])
   vi.mocked(api.uploadBatch).mockResolvedValue(queuedJob)
@@ -156,6 +160,41 @@ test('filters batch items by status and keeps the selected filter after polling'
 
   expect(screen.getByRole('button', { name: /失败 1/ }).getAttribute('aria-pressed')).toBe('true')
   expect(within(queue).getByRole('button', { name: /Failed problem/ })).toBeTruthy()
+  vi.useRealTimers()
+})
+
+test('keeps the selected completed job visible after polling', async () => {
+  vi.useFakeTimers()
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  const completedJob: BatchJobDetail = {
+    ...mixedJob,
+    job: {
+      ...mixedJob.job,
+      status: 'COMPLETED',
+      pendingCount: 0,
+      runningCount: 0
+    }
+  }
+  vi.mocked(api.listBatchJobs)
+    .mockResolvedValueOnce([mixedJob.job])
+    .mockResolvedValueOnce([completedJob.job])
+    .mockResolvedValueOnce([completedJob.job])
+  vi.mocked(api.getBatchJob)
+    .mockResolvedValueOnce(mixedJob)
+    .mockResolvedValueOnce(completedJob)
+    .mockResolvedValueOnce(completedJob)
+
+  render(AnalysisView)
+  await user.click(await screen.findByRole('button', { name: /失败 1/ }))
+
+  await vi.advanceTimersByTimeAsync(3000)
+  await waitFor(() => expect(api.getBatchJob).toHaveBeenCalledTimes(2))
+  await vi.advanceTimersByTimeAsync(3000)
+  await waitFor(() => expect(api.getBatchJob).toHaveBeenCalledTimes(3))
+
+  expect(screen.getByRole('button', { name: /失败 1/ }).getAttribute('aria-pressed')).toBe('true')
+  expect(screen.getByRole('button', { name: /Failed problem/ })).toBeTruthy()
+  expect(screen.getAllByText(/Codex CLI exited with code 124/).length).toBeGreaterThan(0)
   vi.useRealTimers()
 })
 

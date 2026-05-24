@@ -99,7 +99,7 @@ async function onFileChange(event: Event) {
 async function loadJobs(keepSelection = true) {
   try {
     jobs.value = await api.listBatchJobs()
-    if (selected.value && keepSelection && isActiveJob(selected.value.job)) {
+    if (selected.value && keepSelection) {
       const stillExists = jobs.value.some(job => job.id === selected.value?.job.id)
       if (stillExists) {
         selected.value = await api.getBatchJob(selected.value.job.id)
