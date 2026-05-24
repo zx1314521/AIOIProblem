@@ -123,8 +123,8 @@ async function viewProblem(problem: Problem) {
   }
 }
 
-async function markPassed(problem: Problem) {
-  const updated = await api.markPassed(problem.id)
+async function togglePassed(problem: Problem) {
+  const updated = problem.passed ? await api.unmarkPassed(problem.id) : await api.markPassed(problem.id)
   problems.value = problems.value.map(item => item.id === updated.id ? updated : item)
   if (selectedProblem.value?.id === updated.id) {
     selectedProblem.value = updated
@@ -237,7 +237,7 @@ onMounted(load)
           <button class="ghost" type="button" title="编辑题目" @click="openEdit(problem)">
             <Pencil :size="17" />编辑
           </button>
-          <button class="ghost" type="button" :disabled="problem.passed" title="标注已通过" @click="markPassed(problem)">
+          <button class="ghost" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
             <CheckCircle2 :size="17" />{{ problem.passed ? '已通过' : '通过' }}
           </button>
           <button class="ghost danger" type="button" title="删除题目" @click="deleteProblem(problem)">
@@ -271,7 +271,7 @@ onMounted(load)
           <button class="ghost" type="button" @click="openEdit(selectedProblem)">
             <Pencil :size="18" />编辑
           </button>
-          <button class="ghost" type="button" :disabled="selectedProblem.passed" @click="markPassed(selectedProblem)">
+          <button class="ghost" type="button" @click="togglePassed(selectedProblem)">
             <CheckCircle2 :size="18" />{{ selectedProblem.passed ? '已通过' : '标注已通过' }}
           </button>
           <button class="ghost danger" type="button" @click="deleteProblem(selectedProblem)">

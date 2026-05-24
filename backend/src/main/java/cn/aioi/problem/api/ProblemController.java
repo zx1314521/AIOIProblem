@@ -59,6 +59,11 @@ public class ProblemController {
         return problemService.markPassed(id, principal.user());
     }
 
+    @DeleteMapping("/{id}/passed")
+    ProblemDtos.ProblemResponse unmarkPassed(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return problemService.unmarkPassed(id, principal.user());
+    }
+
     @DeleteMapping("/{id}")
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable Long id) {

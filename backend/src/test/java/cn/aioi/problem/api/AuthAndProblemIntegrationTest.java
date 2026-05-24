@@ -63,6 +63,24 @@ class AuthAndProblemIntegrationTest {
         assertThat(passed.getBody()).isNotNull();
         assertThat(passed.getBody().passed()).isTrue();
 
+        ResponseEntity<ProblemDtos.ProblemResponse> unpassed = rest.exchange(
+                "/api/problems/" + created.getBody().id() + "/passed",
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                ProblemDtos.ProblemResponse.class
+        );
+        assertThat(unpassed.getBody()).isNotNull();
+        assertThat(unpassed.getBody().passed()).isFalse();
+
+        passed = rest.exchange(
+                "/api/problems/" + created.getBody().id() + "/passed",
+                HttpMethod.POST,
+                new HttpEntity<>(headers),
+                ProblemDtos.ProblemResponse.class
+        );
+        assertThat(passed.getBody()).isNotNull();
+        assertThat(passed.getBody().passed()).isTrue();
+
         ProblemDtos.ProblemRequest update = new ProblemDtos.ProblemRequest(
                 "最短路提高",
                 "更新后的题面。",

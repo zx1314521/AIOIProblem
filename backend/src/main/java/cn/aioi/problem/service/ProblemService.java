@@ -95,6 +95,13 @@ public class ProblemService {
     }
 
     @Transactional
+    public ProblemDtos.ProblemResponse unmarkPassed(Long id, User user) {
+        Problem problem = getProblem(id);
+        passedProblems.findByUserAndProblem(user, problem).ifPresent(passedProblems::delete);
+        return ProblemDtos.ProblemResponse.from(problem, false);
+    }
+
+    @Transactional
     public void delete(Long id) {
         Problem problem = getProblem(id);
         passedProblems.deleteByProblem(problem);

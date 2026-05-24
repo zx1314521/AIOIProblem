@@ -52,6 +52,7 @@ export const api = {
     request<Problem>(`/api/problems/${id}`, { method: 'PUT', body: JSON.stringify(problem) }),
   deleteProblem: (id: number) => request<void>(`/api/problems/${id}`, { method: 'DELETE' }),
   markPassed: (id: number) => request<Problem>(`/api/problems/${id}/passed`, { method: 'POST' }),
+  unmarkPassed: (id: number) => request<Problem>(`/api/problems/${id}/passed`, { method: 'DELETE' }),
   listProblemSets: () => request<ProblemSet[]>('/api/problem-sets'),
   createProblemSet: (name: string, description: string) =>
     request<ProblemSet>('/api/problem-sets', { method: 'POST', body: JSON.stringify({ name, description }) }),

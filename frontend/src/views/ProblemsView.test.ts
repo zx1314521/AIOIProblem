@@ -11,7 +11,8 @@ vi.mock('../services/api', () => ({
     createProblem: vi.fn(),
     updateProblem: vi.fn(),
     deleteProblem: vi.fn(),
-    markPassed: vi.fn()
+    markPassed: vi.fn(),
+    unmarkPassed: vi.fn()
   }
 }))
 
@@ -65,4 +66,17 @@ test('manages problems with sorting and create dialog', async () => {
   await userEvent.click(screen.getByText('新建题目'))
   expect(screen.getByRole('dialog')).toBeTruthy()
   expect(screen.getByPlaceholderText('题面描述')).toBeTruthy()
+})
+
+test('toggles passed state from problem list', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue([{ ...sampleProblems[0], passed: true }])
+  vi.mocked(api.unmarkPassed).mockResolvedValue({ ...sampleProblems[0], passed: false })
+
+  render(ProblemsView)
+
+  const passedButton = await screen.findByRole('button', { name: '已通过' })
+  await userEvent.click(passedButton)
+
+  expect(api.unmarkPassed).toHaveBeenCalledWith(1)
+  expect(await screen.findByRole('button', { name: '通过' })).toBeTruthy()
 })
