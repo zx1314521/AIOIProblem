@@ -22,22 +22,11 @@ public class AiProviderRouter implements AiProvider {
 
     @Override
     public AiAssessment assess(ProblemInput input) {
-        try {
-            AiRuntimeSettings settings = settingsService.runtimeSettings();
-            return switch (settings.provider()) {
-                case "deepseek" -> deepSeek.assess(input, settings);
-                case "codex" -> codexCli.assess(input, settings);
-                default -> ruleBased.assess(input);
-            };
-        } catch (RuntimeException exception) {
-            AiAssessment fallback = ruleBased.assess(input);
-            return new AiAssessment(
-                    fallback.difficulty(),
-                    Math.min(fallback.confidence(), 0.55),
-                    fallback.tags(),
-                    fallback.hints(),
-                    "AI Provider 不可用，已回退到本地规则模型：" + exception.getMessage()
-            );
-        }
+        AiRuntimeSettings settings = settingsService.runtimeSettings();
+        return switch (settings.provider()) {
+            case "deepseek" -> deepSeek.assess(input, settings);
+            case "codex" -> codexCli.assess(input, settings);
+            default -> ruleBased.assess(input);
+        };
     }
 }

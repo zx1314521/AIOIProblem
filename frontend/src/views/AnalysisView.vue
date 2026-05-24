@@ -33,15 +33,17 @@ const draggedItemId = ref<number | null>(null)
 let timer: number | undefined
 
 const selectedJob = computed(() => selected.value?.job)
-const visibleQueueItems = computed(() => {
-  return selected.value?.items.filter(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? []
-})
 const progress = computed(() => {
   const job = selected.value?.job
   if (!job || job.totalCount === 0) return 0
   return Math.round(((job.successCount + job.failedCount) / job.totalCount) * 100)
 })
-const previewHtml = computed(() => markdown.render(selectedItem.value?.content || ''))
+const jobOptions = computed(() => {
+  const activeJobs = jobs.value.filter(job => job.status === 'RUNNING' || job.status === 'PAUSED' || job.pendingCount > 0 || job.runningCount > 0)
+  return activeJobs.length > 0 ? activeJobs : jobs.value.slice(0, 1)
+})
+const queueItems = computed(() => selected.value?.items ?? [])
+const previewHtml = computed(() => markdown.render(normalizeProblemMath(selectedItem.value?.content || '')))
 
 async function analyzeText() {
   loading.value = true
@@ -130,8 +132,15 @@ async function loadJobs(keepSelection = true) {
 
 async function selectJob(id: number) {
   selected.value = await api.getBatchJob(id)
-  selectedItem.value = visibleQueueItems.value[0] ?? selected.value.items[0] ?? null
+  selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
   editing.value = false
+}
+
+function onJobChange(event: Event) {
+  const id = Number((event.target as HTMLSelectElement).value)
+  if (id) {
+    selectJob(id)
+  }
 }
 
 async function uploadBatch() {
@@ -143,7 +152,7 @@ async function uploadBatch() {
   batchError.value = ''
   try {
     selected.value = await api.uploadBatch(batchName.value, batchFiles.value)
-    selectedItem.value = visibleQueueItems.value[0] ?? selected.value.items[0] ?? null
+    selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
     batchFiles.value = []
     await loadJobs()
   } catch (err) {
@@ -192,7 +201,7 @@ async function saveItemEdit() {
 async function deleteItem(item: BatchItem) {
   if (!selectedJob.value || item.status !== 'PENDING') return
   selected.value = await api.deleteBatchItem(selectedJob.value.id, item.id)
-  selectedItem.value = visibleQueueItems.value[0] ?? selected.value.items[0] ?? null
+  selectedItem.value = queueItems.value[0] ?? null
   await loadJobs()
 }
 
@@ -206,7 +215,7 @@ async function onDrop(target: BatchItem) {
     draggedItemId.value = null
     return
   }
-  const pending = visibleQueueItems.value.filter(item => item.status === 'PENDING')
+  const pending = queueItems.value.filter(item => item.status === 'PENDING')
   const from = pending.findIndex(item => item.id === draggedItemId.value)
   const to = pending.findIndex(item => item.id === target.id)
   if (from < 0 || to < 0) return
@@ -235,6 +244,24 @@ function titleFromFilename(name: string) {
 function isTextProblemFile(file: File) {
   const name = file.name.toLowerCase()
   return name.endsWith('.txt') || name.endsWith('.md')
+}
+
+function normalizeProblemMath(source: string) {
+  const converted = source
+    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expression: string) => `$${expression}$`)
+    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expression: string) => `\n$$\n${expression}\n$$\n`)
+  return converted
+    .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g)
+    .map(part => part.startsWith('$') ? part : wrapLooseMath(part))
+    .join('')
+}
+
+function wrapLooseMath(source: string) {
+  return source
+    .replace(/(^|[^\w$\\])([A-Za-z][A-Za-z0-9]*_(?:\{[^}\n]+\}|[A-Za-z0-9]+))(?![\w$])/g,
+      (_, prefix: string, expression: string) => `${prefix}$${expression}$`)
+    .replace(/(^|[^\w$\\])\\(dots|ldots|leq|geq|neq|times|cdot|sum|sqrt)(?![A-Za-z])/g,
+      (_, prefix: string, command: string) => `${prefix}$\\${command}$`)
 }
 
 onMounted(() => {
@@ -295,19 +322,16 @@ onUnmounted(() => {
         <span v-if="selectedJob" class="tag">{{ statusText(selectedJob.status) }}</span>
       </div>
 
-      <div class="job-strip">
-        <button
-          v-for="job in jobs"
-          :key="job.id"
-          class="job-button"
-          :class="{ active: selectedJob?.id === job.id }"
-          type="button"
-          @click="selectJob(job.id)"
-        >
-          <strong>{{ job.name }}</strong>
-          <span>{{ job.successCount + job.failedCount }}/{{ job.totalCount }} · 等待 {{ job.pendingCount }} · 运行 {{ job.runningCount }}</span>
-        </button>
-        <p v-if="jobs.length === 0" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
+      <div class="job-strip compact-job">
+        <label v-if="jobOptions.length > 0" class="field">
+          <span>当前批次</span>
+          <select class="input" :value="selectedJob?.id" @change="onJobChange">
+            <option v-for="job in jobOptions" :key="job.id" :value="job.id">
+              {{ job.name }} · {{ statusText(job.status) }} · {{ job.successCount + job.failedCount }}/{{ job.totalCount }}
+            </option>
+          </select>
+        </label>
+        <p v-else class="status">暂无任务，选择多个题面文件后可加入队列。</p>
       </div>
 
       <div v-if="selectedJob" class="progress">
@@ -325,7 +349,7 @@ onUnmounted(() => {
 
       <div class="queue-list">
         <button
-          v-for="item in visibleQueueItems"
+          v-for="(item, index) in queueItems"
           :key="item.id"
           class="queue-item"
           :class="{ active: selectedItem?.id === item.id, locked: item.status !== 'PENDING' }"
@@ -336,10 +360,10 @@ onUnmounted(() => {
           @dragover.prevent
           @drop="onDrop(item)"
         >
-          <strong>{{ item.title }}</strong>
-          <span>{{ statusText(item.status) }}</span>
+          <strong><span>{{ index + 1 }}</span>{{ item.title }}</strong>
+          <small>{{ statusText(item.status) }}<template v-if="item.errorMessage"> · {{ item.errorMessage }}</template></small>
         </button>
-        <p v-if="selectedJob && visibleQueueItems.length === 0" class="status">当前任务没有运行或等待中的题。</p>
+        <p v-if="selectedJob && queueItems.length === 0" class="status">当前批次没有题目。</p>
       </div>
     </aside>
 
@@ -439,7 +463,6 @@ onUnmounted(() => {
   gap: 8px;
 }
 
-.job-button,
 .queue-item {
   border: 1px solid #dfe4dc;
   border-radius: 6px;
@@ -450,7 +473,6 @@ onUnmounted(() => {
   gap: 4px;
 }
 
-.job-button.active,
 .queue-item.active {
   border-color: #1f6f54;
   background: #eef8f2;
@@ -460,10 +482,40 @@ onUnmounted(() => {
   cursor: default;
 }
 
-.job-button span,
-.queue-item span {
+.compact-job {
+  gap: 6px;
+}
+
+.queue-list {
+  max-height: min(72vh, 860px);
+  overflow: auto;
+}
+
+.queue-item {
+  padding: 7px 9px;
+  min-height: 46px;
+}
+
+.queue-item strong {
+  display: flex;
+  gap: 7px;
+  align-items: baseline;
+  min-width: 0;
+}
+
+.queue-item strong span {
+  color: #1f6f54;
+  font-size: 12px;
+  font-weight: 700;
+  min-width: 20px;
+}
+
+.queue-item small {
   color: #617069;
-  font-size: 13px;
+  font-size: 12px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .progress {
