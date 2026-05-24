@@ -10,7 +10,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Authorization', `Bearer ${authState.token}`)
   }
   const response = await fetch(path, { ...options, headers })
-  if (response.status === 401) {
+  if (response.status === 401 || response.status === 403) {
     clearAuth()
   }
   if (!response.ok) {

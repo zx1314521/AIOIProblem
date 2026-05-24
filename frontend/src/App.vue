@@ -39,7 +39,7 @@ function logout() {
       <nav class="nav-list" aria-label="主导航">
         <RouterLink to="/analysis"><UploadCloud :size="18" />题面分析</RouterLink>
         <RouterLink to="/history"><History :size="18" />历史记录</RouterLink>
-        <RouterLink to="/problems"><Search :size="18" />题目搜索</RouterLink>
+        <RouterLink to="/problems"><Search :size="18" />题目管理</RouterLink>
         <RouterLink to="/sets"><ClipboardList :size="18" />题单管理</RouterLink>
         <RouterLink to="/recommendations"><Sparkles :size="18" />AI推荐</RouterLink>
         <RouterLink to="/passed"><SquareCheckBig :size="18" />通过记录</RouterLink>
