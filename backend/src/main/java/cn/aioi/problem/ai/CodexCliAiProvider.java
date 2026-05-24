@@ -22,40 +22,48 @@ public class CodexCliAiProvider {
     }
 
     public AiAssessment assess(ProblemInput input) {
+        Path outputFile = null;
         try {
             String command = properties.codex().command();
             if (command == null || command.isBlank()) {
                 throw new IllegalStateException("Codex CLI 命令未配置");
             }
-            Process process = startProcess(command, prompt(input));
+            outputFile = Files.createTempFile("aioi-codex-", ".txt");
+            Process process = startProcess(command, prompt(input), outputFile);
             boolean finished = process.waitFor(properties.codex().timeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 throw new IllegalStateException("Codex CLI 调用超时");
             }
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String output = readCodexOutput(outputFile, process);
             return parser.parse(output);
         } catch (Exception exception) {
             throw new IllegalStateException("Codex CLI 调用失败: " + exception.getMessage(), exception);
+        } finally {
+            deleteIfExists(outputFile);
         }
     }
 
     public AiAssessment assess(ProblemInput input, AiRuntimeSettings settings) {
+        Path outputFile = null;
         try {
             String command = settings.codexCommand();
             if (command == null || command.isBlank()) {
                 throw new IllegalStateException("Codex CLI 命令未配置");
             }
-            Process process = startProcess(command, prompt(input));
+            outputFile = Files.createTempFile("aioi-codex-", ".txt");
+            Process process = startProcess(command, prompt(input), outputFile);
             boolean finished = process.waitFor(settings.codexTimeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
                 throw new IllegalStateException("Codex CLI 调用超时");
             }
-            String output = new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+            String output = readCodexOutput(outputFile, process);
             return parser.parse(output);
         } catch (Exception exception) {
             throw new IllegalStateException("Codex CLI 调用失败: " + exception.getMessage(), exception);
+        } finally {
+            deleteIfExists(outputFile);
         }
     }
 
@@ -67,17 +75,48 @@ public class CodexCliAiProvider {
                 """ + input.title() + "\n\n" + input.text();
     }
 
-    private Process startProcess(String command, String prompt) throws java.io.IOException {
-        return new ProcessBuilder(commandLine(command, prompt))
+    private Process startProcess(String command, String prompt, Path outputFile) throws java.io.IOException {
+        Process process = new ProcessBuilder(commandLine(command, outputFile))
                 .redirectErrorStream(true)
                 .start();
+        try (var writer = process.outputWriter(StandardCharsets.UTF_8)) {
+            writer.write(prompt);
+        }
+        return process;
     }
 
-    static List<String> commandLine(String command, String prompt) {
+    private String readCodexOutput(Path outputFile, Process process) throws java.io.IOException {
+        if (outputFile != null && Files.isRegularFile(outputFile)) {
+            String lastMessage = Files.readString(outputFile, StandardCharsets.UTF_8).trim();
+            if (!lastMessage.isBlank()) {
+                return lastMessage;
+            }
+        }
+        return new String(process.getInputStream().readAllBytes(), StandardCharsets.UTF_8);
+    }
+
+    private void deleteIfExists(Path outputFile) {
+        if (outputFile == null) {
+            return;
+        }
+        try {
+            Files.deleteIfExists(outputFile);
+        } catch (java.io.IOException ignored) {
+            // Temporary output files are best-effort cleanup.
+        }
+    }
+
+    static List<String> commandLine(String command, Path outputFile) {
         List<String> args = new ArrayList<>();
         args.add(resolveExecutable(command));
         args.add("exec");
-        args.add(prompt);
+        args.add("--ignore-user-config");
+        args.add("--skip-git-repo-check");
+        args.add("--color");
+        args.add("never");
+        args.add("--output-last-message");
+        args.add(outputFile.toString());
+        args.add("-");
         return args;
     }
 

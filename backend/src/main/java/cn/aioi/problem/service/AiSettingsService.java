@@ -117,7 +117,7 @@ public class AiSettingsService {
     }
 
     private int defaultCodexTimeout() {
-        return properties.codex() == null ? 60 : Math.max(5, properties.codex().timeoutSeconds());
+        return properties.codex() == null ? 180 : Math.max(180, properties.codex().timeoutSeconds());
     }
 
     private String defaultString(String value, String fallback) {
@@ -128,4 +128,3 @@ public class AiSettingsService {
         return value == null ? "" : value.trim();
     }
 }
-

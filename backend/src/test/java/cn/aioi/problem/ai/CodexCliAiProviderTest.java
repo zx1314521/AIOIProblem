@@ -5,6 +5,7 @@ import org.junit.jupiter.api.io.TempDir;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -37,5 +38,23 @@ class CodexCliAiProviderTest {
         );
 
         assertThat(resolved).isEqualTo(cmd.toString());
+    }
+
+    @Test
+    void commandLineReadsPromptFromStdinAndWritesLastMessage(@TempDir Path tempDir) throws Exception {
+        Path output = tempDir.resolve("last-message.txt");
+
+        List<String> commandLine = CodexCliAiProvider.commandLine("codex", output);
+
+        assertThat(commandLine).containsSubsequence(
+                "exec",
+                "--ignore-user-config",
+                "--skip-git-repo-check",
+                "--color",
+                "never",
+                "--output-last-message",
+                output.toString(),
+                "-"
+        );
     }
 }

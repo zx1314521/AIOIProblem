@@ -32,4 +32,4 @@ aioi:
       timeout-seconds: ${DEEPSEEK_TIMEOUT_SECONDS:45}
     codex:
       command: ${CODEX_CLI_COMMAND:codex}
-      timeout-seconds: ${CODEX_TIMEOUT_SECONDS:60}
+      timeout-seconds: ${CODEX_TIMEOUT_SECONDS:180}

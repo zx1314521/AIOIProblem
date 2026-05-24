@@ -9,5 +9,11 @@ public record AiRuntimeSettings(
         String codexCommand,
         int codexTimeoutSeconds
 ) {
+    public String providerLabel() {
+        return switch (provider) {
+            case "deepseek" -> "DeepSeek API";
+            case "codex" -> "Codex CLI";
+            default -> "AI Provider";
+        };
+    }
 }
-
