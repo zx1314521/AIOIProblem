@@ -65,7 +65,7 @@ public class BatchJobService {
     @Transactional
     public BatchDtos.BatchJobDetailResponse upload(String name, MultipartFile[] files, User user) {
         if (files == null || files.length == 0) {
-            throw new IllegalArgumentException("请选择至少一个 .txt 文件");
+            throw new IllegalArgumentException("请选择至少一个 .txt 或 .md 文件");
         }
         if (files.length > 5000) {
             throw new IllegalArgumentException("单次最多上传 5000 个文件");
@@ -76,8 +76,8 @@ public class BatchJobService {
                 throw new IllegalArgumentException("文件不能为空：" + file.getOriginalFilename());
             }
             String filename = file.getOriginalFilename() == null ? "未命名.txt" : file.getOriginalFilename();
-            if (!filename.toLowerCase().endsWith(".txt")) {
-                throw new IllegalArgumentException("仅支持 .txt 文件：" + filename);
+            if (!isTextProblemFile(filename)) {
+                throw new IllegalArgumentException("仅支持 .txt 或 .md 文件：" + filename);
             }
             items.save(new BatchJobItem(job, titleFromFilename(filename), readUtf8(file), (int) items.countByJobAndStatus(job, BatchItemStatus.PENDING)));
         }
@@ -302,10 +302,18 @@ public class BatchJobService {
         if (slash >= 0) {
             clean = clean.substring(slash + 1);
         }
-        if (clean.toLowerCase().endsWith(".txt")) {
+        String lower = clean.toLowerCase();
+        if (lower.endsWith(".txt")) {
             clean = clean.substring(0, clean.length() - 4);
+        } else if (lower.endsWith(".md")) {
+            clean = clean.substring(0, clean.length() - 3);
         }
         return clean.isBlank() ? "未命名题目" : clean;
+    }
+
+    private boolean isTextProblemFile(String filename) {
+        String lower = filename.toLowerCase();
+        return lower.endsWith(".txt") || lower.endsWith(".md");
     }
 
     private String defaultName(String name) {

@@ -44,12 +44,15 @@ async function selectJob(id: number, clearError = true) {
 
 function onFilesChange(event: Event) {
   const input = event.target as HTMLInputElement
-  files.value = Array.from(input.files ?? []).filter(file => file.name.toLowerCase().endsWith('.txt'))
+  files.value = Array.from(input.files ?? []).filter(file => {
+    const name = file.name.toLowerCase()
+    return name.endsWith('.txt') || name.endsWith('.md')
+  })
 }
 
 async function upload() {
   if (files.value.length === 0) {
-    error.value = '请选择 .txt 文件'
+    error.value = '请选择 .txt 或 .md 文件'
     return
   }
   uploading.value = true
@@ -102,7 +105,7 @@ onUnmounted(() => {
   <header class="page-header">
     <div>
       <h1>批量任务</h1>
-      <p>一次上传多个 `title.txt` 文件，系统会按队列逐题调用 AI 分析并保存到题库。</p>
+      <p>一次上传多个 `title.txt` 或 `title.md` 文件，系统会按队列逐题调用 AI 分析并保存到题库。</p>
     </div>
     <button class="ghost" type="button" @click="loadJobs"><RefreshCw :size="18" />刷新</button>
   </header>
@@ -115,8 +118,8 @@ onUnmounted(() => {
         <input v-model="name" class="input" />
       </label>
       <label class="secondary file-picker">
-        <UploadCloud :size="18" />选择 txt 文件
-        <input type="file" accept=".txt" multiple @change="onFilesChange" />
+        <UploadCloud :size="18" />选择 txt/md 文件
+        <input type="file" accept=".txt,.md" multiple @change="onFilesChange" />
       </label>
       <div class="actions">
         <button class="primary" type="button" :disabled="uploading || files.length === 0" @click="upload">
@@ -246,4 +249,3 @@ h2 {
   padding: 10px 12px;
 }
 </style>
-

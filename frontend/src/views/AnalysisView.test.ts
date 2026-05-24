@@ -24,7 +24,7 @@ test('shows progressive hints only after clicking each hint', async () => {
 
   render(AnalysisView)
   await userEvent.type(screen.getByPlaceholderText('在这里粘贴题面、输入输出与数据范围'), 'n <= 1000 动态规划')
-  await userEvent.click(screen.getByText('分析文本'))
+  await userEvent.click(screen.getByText('开始分析'))
 
   expect(await screen.findByText('CSPJ中等')).toBeTruthy()
   expect(screen.queryByText('先定义状态')).toBeNull()
@@ -32,4 +32,3 @@ test('shows progressive hints only after clicking each hint', async () => {
   await userEvent.click(screen.getByText('提示1'))
   expect(screen.getByText('先定义状态')).toBeTruthy()
 })
-
