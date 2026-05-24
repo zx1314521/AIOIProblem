@@ -11,8 +11,10 @@ import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Locale;
 import java.util.Set;
 
 @Service
@@ -29,9 +31,13 @@ public class ProblemService {
         DifficultyLevel parsedDifficulty = difficulty == null || difficulty.isBlank()
                 ? null
                 : DifficultyLevel.fromLabelOrName(difficulty);
-        String normalizedKeyword = blankToNull(keyword);
-        String normalizedTag = blankToNull(tag);
-        return problems.search(normalizedKeyword, parsedDifficulty, normalizedTag).stream()
+        String normalizedKeyword = lowerOrNull(keyword);
+        String normalizedTag = lowerOrNull(tag);
+        return problems.findAllWithTags().stream()
+                .filter(problem -> matchesKeyword(problem, normalizedKeyword))
+                .filter(problem -> parsedDifficulty == null || problem.getDifficulty() == parsedDifficulty)
+                .filter(problem -> matchesTag(problem, normalizedTag))
+                .sorted(Comparator.comparing(Problem::getCreatedAt).reversed())
                 .map(problem -> ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem)))
                 .toList();
     }
@@ -84,5 +90,24 @@ public class ProblemService {
     private static String blankToNull(String value) {
         return value == null || value.isBlank() ? null : value.trim();
     }
-}
 
+    private static String lowerOrNull(String value) {
+        String cleaned = blankToNull(value);
+        return cleaned == null ? null : cleaned.toLowerCase(Locale.ROOT);
+    }
+
+    private boolean matchesKeyword(Problem problem, String keyword) {
+        if (keyword == null) {
+            return true;
+        }
+        return problem.getTitle().toLowerCase(Locale.ROOT).contains(keyword)
+                || problem.getDescription().toLowerCase(Locale.ROOT).contains(keyword);
+    }
+
+    private boolean matchesTag(Problem problem, String tag) {
+        if (tag == null) {
+            return true;
+        }
+        return problem.getTags().stream().anyMatch(item -> item.toLowerCase(Locale.ROOT).equals(tag));
+    }
+}
