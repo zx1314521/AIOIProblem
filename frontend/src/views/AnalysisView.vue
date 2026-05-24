@@ -9,6 +9,7 @@ import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
 import { normalizeProblemMath } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
+type BatchStatusFilter = 'ALL' | BatchItem['status']
 
 const title = ref('')
 const text = ref('')
@@ -27,11 +28,24 @@ const editing = ref(false)
 const editTitle = ref('')
 const editContent = ref('')
 const draggedItemId = ref<number | null>(null)
+const statusFilter = ref<BatchStatusFilter>('ALL')
+const expandedErrorItemIds = ref<Set<number>>(new Set())
 let timer: number | undefined
 
 const selectedJob = computed(() => selected.value?.job)
 const queueItems = computed(() => selected.value?.items ?? [])
-const activeItems = computed(() => queueItems.value.filter(item => item.status === 'PENDING' || item.status === 'RUNNING'))
+const filteredQueueItems = computed(() => queueItems.value.filter(item => matchesStatusFilter(item, statusFilter.value)))
+const statusFilterOptions = computed(() => [
+  { value: 'ALL' as const, label: '全部', count: queueItems.value.length },
+  { value: 'PENDING' as const, label: '等待', count: countItemsByStatus('PENDING') },
+  { value: 'RUNNING' as const, label: '运行中', count: countItemsByStatus('RUNNING') },
+  { value: 'SUCCEEDED' as const, label: '成功', count: countItemsByStatus('SUCCEEDED') },
+  { value: 'FAILED' as const, label: '失败', count: countItemsByStatus('FAILED') }
+])
+const emptyFilterText = computed(() => {
+  const option = statusFilterOptions.value.find(item => item.value === statusFilter.value)
+  return option ? `当前没有${option.label === '全部' ? '任务' : `${option.label}题`}` : '当前没有任务'
+})
 const previewHtml = computed(() => markdown.render(normalizeProblemMath(selectedItem.value?.content || '')))
 
 async function analyzeText() {
@@ -44,7 +58,8 @@ async function analyzeText() {
     const problemTitle = title.value.trim() || (fileName.value ? titleFromFilename(fileName.value) : '未命名题目')
     const file = new File([content], `${filenameSafeTitle(problemTitle)}.md`, { type: 'text/markdown' })
     selected.value = await api.uploadBatch('单题分析', [file])
-    selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
+    statusFilter.value = 'ALL'
+    selectedItem.value = preferredItem()
     editing.value = false
   } catch (err) {
     error.value = err instanceof Error ? err.message : '加入任务失败'
@@ -88,12 +103,7 @@ async function loadJobs(keepSelection = true) {
       const stillExists = jobs.value.some(job => job.id === selected.value?.job.id)
       if (stillExists) {
         selected.value = await api.getBatchJob(selected.value.job.id)
-        if (selectedItem.value) {
-          const updated = selected.value.items.find(item => item.id === selectedItem.value?.id)
-          selectedItem.value = updated && (updated.status === 'PENDING' || updated.status === 'RUNNING')
-            ? updated
-            : selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? null
-        }
+        syncSelectedItem()
         return
       }
     }
@@ -111,7 +121,7 @@ async function loadJobs(keepSelection = true) {
 
 async function selectJob(id: number) {
   selected.value = await api.getBatchJob(id)
-  selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
+  selectedItem.value = preferredItem()
   editing.value = false
 }
 
@@ -124,7 +134,8 @@ async function uploadBatch() {
   batchError.value = ''
   try {
     selected.value = await api.uploadBatch(batchName.value, batchFiles.value)
-    selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
+    statusFilter.value = 'ALL'
+    selectedItem.value = preferredItem()
     batchFiles.value = []
   } catch (err) {
     batchError.value = err instanceof Error ? err.message : '上传失败'
@@ -136,6 +147,13 @@ async function uploadBatch() {
 function selectItem(item: BatchItem) {
   selectedItem.value = item
   editing.value = false
+}
+
+function selectStatusFilter(nextFilter: BatchStatusFilter) {
+  statusFilter.value = nextFilter
+  editing.value = false
+  if (selectedItem.value && matchesStatusFilter(selectedItem.value, nextFilter)) return
+  selectedItem.value = filteredQueueItems.value[0] ?? null
 }
 
 function startEdit(item: BatchItem) {
@@ -160,7 +178,7 @@ async function saveItemEdit() {
 async function deleteItem(item: BatchItem) {
   if (!selectedJob.value || item.status !== 'PENDING') return
   selected.value = await api.deleteBatchItem(selectedJob.value.id, item.id)
-  selectedItem.value = queueItems.value[0] ?? null
+  selectedItem.value = filteredQueueItems.value[0] ?? preferredItem()
   await loadJobs()
 }
 
@@ -183,6 +201,53 @@ async function onDrop(target: BatchItem) {
   reordered.splice(to, 0, moved)
   selected.value = await api.reorderBatchItems(selectedJob.value.id, reordered.map(item => item.id))
   draggedItemId.value = null
+  syncSelectedItem()
+}
+
+function countItemsByStatus(status: BatchItem['status']) {
+  return queueItems.value.filter(item => item.status === status).length
+}
+
+function matchesStatusFilter(item: BatchItem, filter: BatchStatusFilter) {
+  return filter === 'ALL' || item.status === filter
+}
+
+function preferredItem() {
+  return filteredQueueItems.value.find(item => item.status === 'RUNNING' || item.status === 'PENDING')
+    ?? filteredQueueItems.value[0]
+    ?? null
+}
+
+function syncSelectedItem() {
+  if (!selected.value) {
+    selectedItem.value = null
+    return
+  }
+  const updated = selectedItem.value
+    ? selected.value.items.find(item => item.id === selectedItem.value?.id) ?? null
+    : null
+  selectedItem.value = updated && matchesStatusFilter(updated, statusFilter.value)
+    ? updated
+    : preferredItem()
+}
+
+function errorSummary(message: string) {
+  const normalized = message.replace(/\s+/g, ' ').trim()
+  return normalized.length > 88 ? `${normalized.slice(0, 88)}...` : normalized
+}
+
+function isErrorExpanded(itemId: number) {
+  return expandedErrorItemIds.value.has(itemId)
+}
+
+function toggleError(itemId: number) {
+  const next = new Set(expandedErrorItemIds.value)
+  if (next.has(itemId)) {
+    next.delete(itemId)
+  } else {
+    next.add(itemId)
+  }
+  expandedErrorItemIds.value = next
 }
 
 function statusText(status: string) {
@@ -270,12 +335,27 @@ onUnmounted(() => {
         <h2>任务列表</h2>
       </div>
 
-      <div class="queue-list">
+      <div v-if="selectedJob" class="status-filters" aria-label="任务状态筛选">
         <button
-          v-for="(item, index) in activeItems"
+          v-for="option in statusFilterOptions"
+          :key="option.value"
+          class="filter-chip"
+          :class="{ active: statusFilter === option.value }"
+          type="button"
+          :aria-pressed="statusFilter === option.value"
+          @click="selectStatusFilter(option.value)"
+        >
+          <span>{{ option.label }}</span>
+          <strong>{{ option.count }}</strong>
+        </button>
+      </div>
+
+      <div class="queue-list" aria-label="任务题目列表">
+        <button
+          v-for="(item, index) in filteredQueueItems"
           :key="item.id"
           class="queue-item"
-          :class="{ active: selectedItem?.id === item.id, locked: item.status !== 'PENDING', running: item.status === 'RUNNING' }"
+          :class="{ active: selectedItem?.id === item.id, locked: item.status !== 'PENDING', running: item.status === 'RUNNING', failed: item.status === 'FAILED', succeeded: item.status === 'SUCCEEDED' }"
           type="button"
           :draggable="item.status === 'PENDING'"
           @click="selectItem(item)"
@@ -284,9 +364,12 @@ onUnmounted(() => {
           @drop="onDrop(item)"
         >
           <strong><span>{{ index + 1 }}</span>{{ item.title }}</strong>
-          <small>{{ statusText(item.status) }}<template v-if="item.errorMessage"> · {{ item.errorMessage }}</template></small>
+          <small>{{ statusText(item.status) }}</small>
+          <span v-if="item.status === 'FAILED' && item.errorMessage" class="error-summary">
+            {{ isErrorExpanded(item.id) ? item.errorMessage : errorSummary(item.errorMessage) }}
+          </span>
         </button>
-        <p v-if="selectedJob && activeItems.length === 0" class="status">当前没有等待或运行中的题。</p>
+        <p v-if="selectedJob && filteredQueueItems.length === 0" class="status">{{ emptyFilterText }}</p>
         <p v-if="!selectedJob" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
       </div>
 
@@ -304,6 +387,19 @@ onUnmounted(() => {
             <button class="ghost" type="button" @click="deleteItem(selectedItem)"><Trash2 :size="16" />删除</button>
           </div>
         </header>
+
+        <div v-if="selectedItem.status === 'FAILED' && selectedItem.errorMessage" class="failure-detail">
+          <strong>失败原因</strong>
+          <p>{{ isErrorExpanded(selectedItem.id) ? selectedItem.errorMessage : errorSummary(selectedItem.errorMessage) }}</p>
+          <button
+            v-if="selectedItem.errorMessage.length > errorSummary(selectedItem.errorMessage).length"
+            class="ghost compact"
+            type="button"
+            @click="toggleError(selectedItem.id)"
+          >
+            {{ isErrorExpanded(selectedItem.id) ? '收起失败原因' : '查看完整失败原因' }}
+          </button>
+        </div>
 
         <div v-if="editing" class="grid">
           <input v-model="editTitle" class="input" />
@@ -361,6 +457,47 @@ onUnmounted(() => {
   gap: 8px;
 }
 
+.status-filters {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 6px;
+  margin: 14px 0 12px;
+}
+
+.filter-chip {
+  min-width: 0;
+  border: 1px solid #d6e0d9;
+  border-radius: 8px;
+  background: #f8faf7;
+  color: #31453b;
+  padding: 7px 6px;
+  display: grid;
+  gap: 2px;
+  justify-items: center;
+  line-height: 1.15;
+}
+
+.filter-chip span,
+.filter-chip strong {
+  min-width: 0;
+  max-width: 100%;
+}
+
+.filter-chip span {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.filter-chip strong {
+  font-size: 15px;
+}
+
+.filter-chip.active {
+  border-color: #17684f;
+  background: #eaf5ef;
+  color: #0f533f;
+}
+
 .queue-item {
   border: 1px solid #dce5dd;
   border-radius: 8px;
@@ -385,6 +522,16 @@ onUnmounted(() => {
 .queue-item.running {
   border-color: #d8a94d;
   background: #fff9e8;
+}
+
+.queue-item.failed {
+  border-color: #efc0ba;
+  background: #fff7f5;
+}
+
+.queue-item.succeeded {
+  border-color: #c9dfcf;
+  background: #f4fbf5;
 }
 
 .queue-item.locked {
@@ -421,6 +568,39 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.error-summary {
+  color: #9b2f29;
+  font-size: 12px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.failure-detail {
+  border: 1px solid #f0c3bd;
+  border-radius: 8px;
+  background: #fff7f5;
+  padding: 12px;
+  display: grid;
+  gap: 8px;
+}
+
+.failure-detail strong {
+  color: #8f2822;
+}
+
+.failure-detail p {
+  margin: 0;
+  color: #5f302d;
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.compact {
+  min-height: 32px;
+  width: max-content;
+  padding: 7px 10px;
 }
 
 .form-title {

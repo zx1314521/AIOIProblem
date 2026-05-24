@@ -1,4 +1,4 @@
-import { render, screen } from '@testing-library/vue'
+import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import AnalysisView from './AnalysisView.vue'
 import { api } from '../services/api'
@@ -18,7 +18,7 @@ vi.mock('../services/api', () => ({
 const queuedJob: BatchJobDetail = {
   job: {
     id: 1,
-    name: '单题分析',
+    name: 'Single analysis',
     status: 'RUNNING',
     totalCount: 1,
     successCount: 0,
@@ -30,8 +30,8 @@ const queuedJob: BatchJobDetail = {
   items: [
     {
       id: 10,
-      title: 'P6 错排问题',
-      content: '题面内容 a_i',
+      title: 'P6 wrong order',
+      content: 'Problem content a_i',
       status: 'PENDING',
       sortOrder: 0,
       tags: [],
@@ -40,21 +40,137 @@ const queuedJob: BatchJobDetail = {
   ]
 }
 
+const mixedJob: BatchJobDetail = {
+  job: {
+    id: 2,
+    name: 'Large batch',
+    status: 'RUNNING',
+    totalCount: 5,
+    successCount: 1,
+    failedCount: 1,
+    pendingCount: 2,
+    runningCount: 1,
+    createdAt: '2026-05-24T00:00:00'
+  },
+  items: [
+    {
+      id: 21,
+      title: 'Pending problem',
+      content: '# Pending problem\n\n$a_i$',
+      status: 'PENDING',
+      sortOrder: 0,
+      tags: [],
+      createdAt: '2026-05-24T00:00:00'
+    },
+    {
+      id: 22,
+      title: 'Running problem',
+      content: '# Running problem',
+      status: 'RUNNING',
+      sortOrder: 1,
+      tags: [],
+      createdAt: '2026-05-24T00:00:00'
+    },
+    {
+      id: 23,
+      title: 'Succeeded problem',
+      content: '# Succeeded problem',
+      status: 'SUCCEEDED',
+      sortOrder: 2,
+      tags: [],
+      createdAt: '2026-05-24T00:00:00'
+    },
+    {
+      id: 24,
+      title: 'Failed problem',
+      content: '# Failed problem\n\nInterval DP $f_i$',
+      status: 'FAILED',
+      sortOrder: 3,
+      tags: [],
+      errorMessage: 'Codex CLI exited with code 124 after 120 seconds. stderr: request timed out while analyzing long markdown input with many constraints.',
+      createdAt: '2026-05-24T00:00:00'
+    },
+    {
+      id: 25,
+      title: 'Second pending problem',
+      content: '# Second pending problem',
+      status: 'PENDING',
+      sortOrder: 4,
+      tags: [],
+      createdAt: '2026-05-24T00:00:00'
+    }
+  ]
+}
+
+beforeEach(() => {
+  vi.useRealTimers()
+  vi.clearAllMocks()
+})
+
 test('starts single analysis by enqueueing it as a task', async () => {
   vi.mocked(api.listBatchJobs).mockResolvedValue([])
   vi.mocked(api.uploadBatch).mockResolvedValue(queuedJob)
 
-  render(AnalysisView)
-  await userEvent.type(screen.getByPlaceholderText('例如：区间最大值'), 'P6 错排问题')
-  await userEvent.type(screen.getByPlaceholderText('在这里粘贴题面、输入输出与数据范围'), '题面内容 a_i')
-  await userEvent.click(screen.getByText('开始分析'))
+  const { container } = render(AnalysisView)
+  const [titleInput, contentInput] = screen.getAllByRole('textbox')
+  await userEvent.type(titleInput, 'P6 wrong order')
+  await userEvent.type(contentInput, 'Problem content a_i')
+  await userEvent.click(container.querySelector('button[type="submit"]') as HTMLButtonElement)
 
   expect(api.uploadBatch).toHaveBeenCalledTimes(1)
   const [, files] = vi.mocked(api.uploadBatch).mock.calls[0]
   expect(files).toHaveLength(1)
-  expect(files[0].name).toBe('P6 错排问题.md')
+  expect(files[0].name).toBe('P6 wrong order.md')
 
-  expect(await screen.findByRole('button', { name: /P6 错排问题/ })).toBeTruthy()
-  expect(screen.getByRole('heading', { name: 'P6 错排问题' })).toBeTruthy()
-  expect(screen.getAllByText('等待中')).toHaveLength(2)
+  expect(await screen.findByRole('button', { name: /P6 wrong order/ })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'P6 wrong order' })).toBeTruthy()
+})
+
+test('filters batch items by status and keeps the selected filter after polling', async () => {
+  vi.useFakeTimers()
+  const user = userEvent.setup({ advanceTimers: vi.advanceTimersByTime })
+  vi.mocked(api.listBatchJobs).mockResolvedValue([mixedJob.job])
+  vi.mocked(api.getBatchJob).mockResolvedValue(mixedJob)
+
+  render(AnalysisView)
+
+  expect(await screen.findByRole('button', { name: /全部 5/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /等待 2/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /运行中 1/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /成功 1/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /失败 1/ })).toBeTruthy()
+
+  await user.click(screen.getByRole('button', { name: /失败 1/ }))
+
+  const queue = screen.getByLabelText('任务题目列表')
+  expect(within(queue).getByRole('button', { name: /Failed problem/ })).toBeTruthy()
+  expect(within(queue).queryByRole('button', { name: /Pending problem/ })).toBeNull()
+  expect(screen.getAllByText(/Codex CLI exited with code 124/).length).toBeGreaterThan(0)
+  expect(screen.queryByText(/many constraints\./)).toBeNull()
+
+  await user.click(screen.getByRole('button', { name: '查看完整失败原因' }))
+  expect(screen.getAllByText(/many constraints\./).length).toBeGreaterThan(0)
+
+  await vi.advanceTimersByTimeAsync(3000)
+  await waitFor(() => expect(api.getBatchJob).toHaveBeenCalledTimes(2))
+
+  expect(screen.getByRole('button', { name: /失败 1/ }).getAttribute('aria-pressed')).toBe('true')
+  expect(within(queue).getByRole('button', { name: /Failed problem/ })).toBeTruthy()
+  vi.useRealTimers()
+})
+
+test('shows an empty state when the selected status has no items', async () => {
+  const noFailedJob: BatchJobDetail = {
+    ...mixedJob,
+    job: { ...mixedJob.job, totalCount: 4, failedCount: 0 },
+    items: mixedJob.items.filter(item => item.status !== 'FAILED')
+  }
+  vi.mocked(api.listBatchJobs).mockResolvedValue([noFailedJob.job])
+  vi.mocked(api.getBatchJob).mockResolvedValue(noFailedJob)
+
+  render(AnalysisView)
+
+  await userEvent.click(await screen.findByRole('button', { name: /失败 0/ }))
+
+  expect(screen.getByText('当前没有失败题')).toBeTruthy()
 })
