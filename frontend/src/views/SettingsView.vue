@@ -112,13 +112,13 @@ onMounted(load)
 .provider-block {
   border: 1px solid #dfe4dc;
   border-radius: 8px;
-  padding: 16px;
+  padding: 18px;
   display: grid;
   gap: 14px;
+  background: #fbfcfa;
 }
 
 h2 {
   margin: 0;
 }
 </style>
-

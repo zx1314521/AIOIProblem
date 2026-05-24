@@ -58,7 +58,7 @@ onMounted(load)
     </div>
   </header>
 
-  <section class="panel grid">
+  <section class="panel grid create-set-panel">
     <h2>新建题单</h2>
     <div class="toolbar">
       <input v-model="name" class="input" placeholder="题单名称" />
@@ -69,7 +69,7 @@ onMounted(load)
   </section>
 
   <section class="problem-list set-list">
-    <article v-for="set in sets" :key="set.id" class="panel">
+    <article v-for="set in sets" :key="set.id" class="panel set-card">
       <div class="page-header set-header">
         <div>
           <h2>{{ set.name }}</h2>
@@ -105,8 +105,17 @@ onMounted(load)
   margin-top: 18px;
 }
 
+.create-set-panel {
+  gap: 14px;
+}
+
+.set-card {
+  display: grid;
+  gap: 14px;
+}
+
 .set-header {
-  margin-bottom: 12px;
+  margin-bottom: 0;
 }
 
 h2 {
@@ -120,5 +129,8 @@ h2 {
 .inner-list {
   margin-top: 12px;
 }
-</style>
 
+.inner-list .problem-row {
+  background: #fbfcfa;
+}
+</style>

@@ -184,7 +184,7 @@ onMounted(load)
     </button>
   </header>
 
-  <section class="panel">
+  <section class="panel management-panel">
     <div class="toolbar">
       <input v-model="keyword" class="input" placeholder="关键词" @keyup.enter="load" />
       <select v-model="difficulty" class="select">
@@ -207,7 +207,7 @@ onMounted(load)
         <component :is="sortDirection === 'asc' ? ArrowUpAZ : ArrowDownAZ" :size="18" />
         {{ sortDirection === 'asc' ? '正序' : '倒序' }}
       </button>
-      <span class="status">{{ sortedProblems.length }} 题</span>
+      <span class="count-chip">{{ sortedProblems.length }} 题</span>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <div class="problem-list">
@@ -237,7 +237,7 @@ onMounted(load)
           <button class="ghost" type="button" title="编辑题目" @click="openEdit(problem)">
             <Pencil :size="17" />编辑
           </button>
-          <button class="ghost" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
+          <button class="ghost pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
             <CheckCircle2 :size="17" />{{ problem.passed ? '已通过' : '通过' }}
           </button>
           <button class="ghost danger" type="button" title="删除题目" @click="deleteProblem(problem)">
@@ -271,7 +271,7 @@ onMounted(load)
           <button class="ghost" type="button" @click="openEdit(selectedProblem)">
             <Pencil :size="18" />编辑
           </button>
-          <button class="ghost" type="button" @click="togglePassed(selectedProblem)">
+          <button class="ghost pass-toggle" :class="{ passed: selectedProblem.passed }" type="button" @click="togglePassed(selectedProblem)">
             <CheckCircle2 :size="18" />{{ selectedProblem.passed ? '已通过' : '标注已通过' }}
           </button>
           <button class="ghost danger" type="button" @click="deleteProblem(selectedProblem)">
@@ -318,8 +318,12 @@ onMounted(load)
   display: flex;
   align-items: center;
   gap: 10px;
-  margin: 12px 0 16px;
+  margin: 10px 0 18px;
   flex-wrap: wrap;
+  padding: 10px 12px;
+  border: 1px solid #e3e9e2;
+  border-radius: 8px;
+  background: #f8faf7;
 }
 
 .inline-field {
@@ -343,19 +347,35 @@ h2 {
   margin: 0;
 }
 
+.management-panel {
+  padding: 18px;
+}
+
+.count-chip {
+  margin-left: auto;
+  color: #45524b;
+  background: #ffffff;
+  border: 1px solid #d9e2da;
+  border-radius: 999px;
+  padding: 6px 10px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .problem-row-compact {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 18px;
+  gap: 20px;
   align-items: center;
   cursor: pointer;
-  transition: border-color 0.16s ease, background 0.16s ease;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
 }
 
 .problem-row-compact:hover,
 .problem-row-compact:focus-visible {
   border-color: #8fb7a7;
-  background: #fbfdfb;
+  background: #fcfdfb;
+  box-shadow: 0 10px 24px rgba(23, 33, 29, 0.07);
   outline: none;
 }
 
@@ -376,15 +396,22 @@ h2 {
   flex-wrap: wrap;
 }
 
+.row-actions .ghost {
+  min-height: 34px;
+  padding: 8px 10px;
+  font-size: 13px;
+}
+
 .passed-tag {
   border-color: #a9c7b9;
   background: #edf7f1;
   color: #1f6f54;
 }
 
-.danger {
-  color: #9f241b;
-  background: #fff1ef;
+.pass-toggle.passed {
+  background: #e9f4ee;
+  color: #17684f;
+  border-color: #b7d1c3;
 }
 
 .ghost:disabled {
@@ -409,7 +436,7 @@ h2 {
   background: #ffffff;
   border: 1px solid #dfe4dc;
   border-radius: 8px;
-  box-shadow: 0 24px 70px rgba(30, 45, 38, 0.22);
+  box-shadow: 0 26px 80px rgba(20, 35, 29, 0.22);
   padding: 20px;
 }
 

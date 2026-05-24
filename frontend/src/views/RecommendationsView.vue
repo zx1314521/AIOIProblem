@@ -37,26 +37,31 @@ onMounted(load)
     <button class="ghost" type="button" @click="load"><RefreshCw :size="18" />刷新</button>
   </header>
 
-  <section class="panel">
+  <section class="panel recommendation-panel">
     <p v-if="error" class="error">{{ error }}</p>
     <template v-if="data">
-      <div class="tag-row weak-row">
-        <span class="status">薄弱标签</span>
+      <div class="weak-row">
+        <span class="weak-title">薄弱标签</span>
         <span v-for="tag in data.weakTags" :key="tag" class="tag">{{ tag }}</span>
       </div>
-      <div class="problem-list">
-        <article v-for="item in data.items" :key="item.problem.id" class="problem-row">
+      <div class="problem-list recommendation-list">
+        <article v-for="item in data.items" :key="item.problem.id" class="problem-row recommendation-row">
           <header>
-            <h3>{{ item.practiceOrder }}. {{ item.problem.title }}</h3>
+            <div class="recommendation-title">
+              <span class="order-badge">{{ item.practiceOrder }}</span>
+              <h3>{{ item.problem.title }}</h3>
+            </div>
             <span class="difficulty">{{ item.problem.difficulty }}</span>
           </header>
           <p>{{ item.reason }}</p>
-          <div class="tag-row">
-            <span v-for="tag in item.problem.tags" :key="tag" class="tag">{{ tag }}</span>
+          <div class="recommendation-footer">
+            <div class="tag-row">
+              <span v-for="tag in item.problem.tags" :key="tag" class="tag">{{ tag }}</span>
+            </div>
+            <button class="ghost pass-action" type="button" @click="markPassed(item.problem.id)">
+              <SquareCheckBig :size="18" />标注已通过
+            </button>
           </div>
-          <button class="ghost" type="button" @click="markPassed(item.problem.id)">
-            <SquareCheckBig :size="18" />标注已通过
-          </button>
         </article>
       </div>
       <p v-if="data.items.length === 0" class="status">暂无可推荐题目，请先在题库中新建题目。</p>
@@ -66,8 +71,66 @@ onMounted(load)
 </template>
 
 <style scoped>
+.recommendation-panel {
+  display: grid;
+  gap: 16px;
+}
+
 .weak-row {
-  margin-bottom: 16px;
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+  padding: 12px;
+  border: 1px solid #e4eadf;
+  border-radius: 8px;
+  background: #f8faf6;
+}
+
+.weak-title {
+  color: #58665f;
+  font-size: 14px;
+  font-weight: 800;
+  margin-right: 2px;
+}
+
+.recommendation-list {
+  gap: 12px;
+}
+
+.recommendation-row {
+  display: grid;
+  gap: 12px;
+}
+
+.recommendation-title {
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.order-badge {
+  width: 28px;
+  height: 28px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 8px;
+  background: #eaf2f9;
+  color: #37658f;
+  font-weight: 900;
+}
+
+.recommendation-footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.pass-action {
+  white-space: nowrap;
 }
 </style>
-

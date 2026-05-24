@@ -233,7 +233,7 @@ onUnmounted(() => {
 
   <section class="analysis-workbench">
     <section class="grid">
-      <form class="panel grid" @submit.prevent="analyzeText">
+      <form class="panel grid analysis-card" @submit.prevent="analyzeText">
         <h2 class="form-title">分析</h2>
         <label class="field">
           <span>题目标题</span>
@@ -335,6 +335,12 @@ onUnmounted(() => {
   overflow: auto;
 }
 
+.analysis-card,
+.task-rail,
+.preview-panel {
+  border-color: #d8e1d9;
+}
+
 .rail-header,
 .preview-header {
   display: flex;
@@ -346,6 +352,7 @@ onUnmounted(() => {
 .rail-header h2,
 .preview-header h2 {
   margin: 0;
+  line-height: 1.25;
 }
 
 .job-strip,
@@ -355,22 +362,28 @@ onUnmounted(() => {
 }
 
 .queue-item {
-  border: 1px solid #dfe4dc;
-  border-radius: 6px;
+  border: 1px solid #dce5dd;
+  border-radius: 8px;
   background: #fbfcfa;
   text-align: left;
   padding: 10px;
   display: grid;
   gap: 4px;
+  transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.queue-item:hover {
+  border-color: #b9cabc;
+  box-shadow: 0 8px 18px rgba(23, 33, 29, 0.06);
 }
 
 .queue-item.active {
-  border-color: #1f6f54;
-  background: #eef8f2;
+  border-color: #17684f;
+  background: #eaf5ef;
 }
 
 .queue-item.running {
-  border-color: #d9ad42;
+  border-color: #d8a94d;
   background: #fff9e8;
 }
 
@@ -412,7 +425,8 @@ onUnmounted(() => {
 
 .form-title {
   margin: 0;
-  font-size: 22px;
+  font-size: 20px;
+  letter-spacing: 0;
 }
 
 .file-button {

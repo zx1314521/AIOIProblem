@@ -66,6 +66,7 @@ async function submit() {
 <style scoped>
 .login-panel {
   width: min(440px, 100%);
+  padding: 26px;
 }
 
 .login-title {
@@ -77,7 +78,8 @@ async function submit() {
 
 h1 {
   margin: 0;
-  font-size: 30px;
+  font-size: 32px;
+  line-height: 1.1;
 }
 
 p {
@@ -85,4 +87,3 @@ p {
   color: #59655f;
 }
 </style>
-

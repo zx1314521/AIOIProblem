@@ -47,6 +47,7 @@ function logout() {
       </nav>
 
       <div class="sidebar-footer">
+        <small class="sidebar-caption">当前账号</small>
         <div class="user-chip">
           <BrainCircuit :size="18" />
           <span>{{ authState.user?.username }}</span>
