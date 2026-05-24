@@ -5,19 +5,15 @@ import markdownItKatex from 'markdown-it-katex'
 import 'katex/dist/katex.min.css'
 import { Edit3, FileText, Save, Trash2, UploadCloud } from 'lucide-vue-next'
 import { api } from '../services/api'
-import type { AnalysisResponse, BatchItem, BatchJob, BatchJobDetail } from '../types'
+import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 
 const title = ref('')
 const text = ref('')
 const fileName = ref('')
-const result = ref<AnalysisResponse | null>(null)
 const loading = ref(false)
-const saving = ref(false)
 const error = ref('')
-const saveMessage = ref('')
-const openHints = ref(new Set<number>())
 
 const jobs = ref<BatchJob[]>([])
 const selected = ref<BatchJobDetail | null>(null)
@@ -38,37 +34,21 @@ const activeItems = computed(() => queueItems.value.filter(item => item.status =
 const previewHtml = computed(() => markdown.render(normalizeProblemMath(selectedItem.value?.content || '')))
 
 async function analyzeText() {
+  const content = text.value.trim()
+  if (!content) return
   loading.value = true
   error.value = ''
-  saveMessage.value = ''
-  selectedItem.value = null
+  batchError.value = ''
   try {
-    result.value = await api.analyzeText(title.value || '未命名题目', text.value)
-    openHints.value = new Set()
+    const problemTitle = title.value.trim() || (fileName.value ? titleFromFilename(fileName.value) : '未命名题目')
+    const file = new File([content], `${filenameSafeTitle(problemTitle)}.md`, { type: 'text/markdown' })
+    selected.value = await api.uploadBatch('单题分析', [file])
+    selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
+    editing.value = false
   } catch (err) {
-    error.value = err instanceof Error ? err.message : '分析失败'
+    error.value = err instanceof Error ? err.message : '加入任务失败'
   } finally {
     loading.value = false
-  }
-}
-
-async function saveAsProblem() {
-  if (!result.value) return
-  saving.value = true
-  saveMessage.value = ''
-  try {
-    await api.createProblem({
-      title: title.value || '未命名题目',
-      description: text.value || '由文件上传分析生成',
-      difficulty: result.value.difficulty,
-      tags: result.value.tags,
-      source: 'AI分析'
-    })
-    saveMessage.value = '已保存到题库'
-  } catch (err) {
-    saveMessage.value = err instanceof Error ? err.message : '保存失败'
-  } finally {
-    saving.value = false
   }
 }
 
@@ -98,12 +78,6 @@ async function onFileChange(event: Event) {
   } catch {
     error.value = '文件读取失败'
   }
-}
-
-function toggleHint(index: number) {
-  const next = new Set(openHints.value)
-  next.has(index) ? next.delete(index) : next.add(index)
-  openHints.value = next
 }
 
 async function loadJobs(keepSelection = true) {
@@ -151,7 +125,6 @@ async function uploadBatch() {
     selected.value = await api.uploadBatch(batchName.value, batchFiles.value)
     selectedItem.value = selected.value.items.find(item => item.status === 'RUNNING' || item.status === 'PENDING') ?? selected.value.items[0] ?? null
     batchFiles.value = []
-    await loadJobs()
   } catch (err) {
     batchError.value = err instanceof Error ? err.message : '上传失败'
   } finally {
@@ -224,6 +197,10 @@ function statusText(status: string) {
 
 function titleFromFilename(name: string) {
   return name.replace(/\.(txt|md)$/i, '') || '未命名题目'
+}
+
+function filenameSafeTitle(source: string) {
+  return source.replace(/[\\/:*?"<>|]/g, '_').trim() || '未命名题目'
 }
 
 function isTextProblemFile(file: File) {
@@ -354,40 +331,6 @@ onUnmounted(() => {
           </div>
         </div>
         <article v-else class="markdown-preview" v-html="previewHtml"></article>
-      </template>
-
-      <template v-else-if="result">
-        <div>
-          <span class="difficulty">{{ result.difficulty }}</span>
-          <span class="status"> 置信度 {{ Math.round(result.confidence * 100) }}%</span>
-        </div>
-        <div class="tag-row">
-          <span v-for="tag in result.tags" :key="tag" class="tag">{{ tag }}</span>
-        </div>
-        <p>{{ result.reasoningSummary }}</p>
-        <article v-for="(hint, index) in result.hints" :key="hint" class="hint">
-          <button type="button" @click="toggleHint(index)">提示{{ index + 1 }}</button>
-          <p v-if="openHints.has(index)">{{ hint }}</p>
-        </article>
-        <div>
-          <h3>相似题</h3>
-          <div v-for="problem in result.similarProblems" :key="problem.id" class="problem-row">
-            <header>
-              <h3>{{ problem.title }}</h3>
-              <span class="difficulty">{{ problem.difficulty }}</span>
-            </header>
-            <div class="tag-row">
-              <span v-for="tag in problem.tags" :key="tag" class="tag">{{ tag }}</span>
-            </div>
-            <p>{{ problem.reason }}</p>
-          </div>
-        </div>
-        <div class="actions">
-          <button class="secondary" type="button" :disabled="saving" @click="saveAsProblem">
-            <Save :size="18" />保存到题库
-          </button>
-          <span class="status">{{ saveMessage }}</span>
-        </div>
       </template>
 
       <p v-else class="status">分析结果或任务题面会显示在这里。</p>

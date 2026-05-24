@@ -2,33 +2,59 @@ import { render, screen } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import AnalysisView from './AnalysisView.vue'
 import { api } from '../services/api'
+import type { BatchJobDetail } from '../types'
 
 vi.mock('../services/api', () => ({
   api: {
-    analyzeText: vi.fn(),
-    analyzeFile: vi.fn(),
-    createProblem: vi.fn()
+    uploadBatch: vi.fn(),
+    listBatchJobs: vi.fn(),
+    getBatchJob: vi.fn(),
+    updateBatchItem: vi.fn(),
+    deleteBatchItem: vi.fn(),
+    reorderBatchItems: vi.fn()
   }
 }))
 
-test('shows progressive hints only after clicking each hint', async () => {
-  vi.mocked(api.analyzeText).mockResolvedValue({
-    difficulty: 'CSPJ中等',
-    difficultyCode: 'CSPJ_MEDIUM',
-    confidence: 0.81,
-    tags: ['动态规划'],
-    hints: ['先定义状态', '写出转移', '滚动数组优化'],
-    reasoningSummary: '需要状态设计。',
-    similarProblems: []
-  })
+const queuedJob: BatchJobDetail = {
+  job: {
+    id: 1,
+    name: '单题分析',
+    status: 'RUNNING',
+    totalCount: 1,
+    successCount: 0,
+    failedCount: 0,
+    pendingCount: 1,
+    runningCount: 0,
+    createdAt: '2026-05-24T00:00:00'
+  },
+  items: [
+    {
+      id: 10,
+      title: 'P6 错排问题',
+      content: '题面内容 a_i',
+      status: 'PENDING',
+      sortOrder: 0,
+      tags: [],
+      createdAt: '2026-05-24T00:00:00'
+    }
+  ]
+}
+
+test('starts single analysis by enqueueing it as a task', async () => {
+  vi.mocked(api.listBatchJobs).mockResolvedValue([])
+  vi.mocked(api.uploadBatch).mockResolvedValue(queuedJob)
 
   render(AnalysisView)
-  await userEvent.type(screen.getByPlaceholderText('在这里粘贴题面、输入输出与数据范围'), 'n <= 1000 动态规划')
+  await userEvent.type(screen.getByPlaceholderText('例如：区间最大值'), 'P6 错排问题')
+  await userEvent.type(screen.getByPlaceholderText('在这里粘贴题面、输入输出与数据范围'), '题面内容 a_i')
   await userEvent.click(screen.getByText('开始分析'))
 
-  expect(await screen.findByText('CSPJ中等')).toBeTruthy()
-  expect(screen.queryByText('先定义状态')).toBeNull()
+  expect(api.uploadBatch).toHaveBeenCalledTimes(1)
+  const [, files] = vi.mocked(api.uploadBatch).mock.calls[0]
+  expect(files).toHaveLength(1)
+  expect(files[0].name).toBe('P6 错排问题.md')
 
-  await userEvent.click(screen.getByText('提示1'))
-  expect(screen.getByText('先定义状态')).toBeTruthy()
+  expect(await screen.findByRole('button', { name: /P6 错排问题/ })).toBeTruthy()
+  expect(screen.getByRole('heading', { name: 'P6 错排问题' })).toBeTruthy()
+  expect(screen.getAllByText('等待中')).toHaveLength(2)
 })
