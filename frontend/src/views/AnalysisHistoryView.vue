@@ -6,6 +6,7 @@ import 'katex/dist/katex.min.css'
 import { RefreshCw } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
+import { normalizeProblemMath } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 
@@ -54,24 +55,6 @@ function statusText(status: string) {
     FAILED: '失败',
     SUCCEEDED: '成功'
   }[status] ?? status
-}
-
-function normalizeProblemMath(source: string) {
-  const converted = source
-    .replace(/\\\(([\s\S]+?)\\\)/g, (_, expression: string) => `$${expression}$`)
-    .replace(/\\\[([\s\S]+?)\\\]/g, (_, expression: string) => `\n$$\n${expression}\n$$\n`)
-  return converted
-    .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g)
-    .map(part => part.startsWith('$') ? part : wrapLooseMath(part))
-    .join('')
-}
-
-function wrapLooseMath(source: string) {
-  return source
-    .replace(/(^|[^\w$\\])([A-Za-z][A-Za-z0-9]*_(?:\{[^}\n]+\}|[A-Za-z0-9]+))(?![\w$])/g,
-      (_, prefix: string, expression: string) => `${prefix}$${expression}$`)
-    .replace(/(^|[^\w$\\])\\(dots|ldots|leq|geq|neq|times|cdot|sum|sqrt)(?![A-Za-z])/g,
-      (_, prefix: string, command: string) => `${prefix}$\\${command}$`)
 }
 
 onMounted(loadHistory)

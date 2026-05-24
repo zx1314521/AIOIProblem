@@ -290,6 +290,16 @@ button {
   line-height: 1.55;
 }
 
+.markdown-preview .katex,
+.markdown-preview .katex * {
+  white-space: nowrap;
+}
+
+.markdown-preview .katex {
+  display: inline-block;
+  max-width: 100%;
+}
+
 .hint {
   border: 1px solid #dde5df;
   border-radius: 6px;
