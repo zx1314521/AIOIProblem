@@ -18,7 +18,6 @@ const saving = ref(false)
 const error = ref('')
 const saveMessage = ref('')
 const openHints = ref(new Set<number>())
-const mode = ref<'single' | 'batch'>('single')
 
 const jobs = ref<BatchJob[]>([])
 const selected = ref<BatchJobDetail | null>(null)
@@ -81,15 +80,23 @@ async function saveAsProblem() {
 
 async function onFileChange(event: Event) {
   const input = event.target as HTMLInputElement
-  const selectedFile = input.files?.[0]
-  if (!selectedFile) return
-  const lowerName = selectedFile.name.toLowerCase()
-  if (!lowerName.endsWith('.txt') && !lowerName.endsWith('.md')) {
+  const files = Array.from(input.files ?? [])
+  if (files.length === 0) return
+  const validFiles = files.filter(isTextProblemFile)
+  if (validFiles.length !== files.length) {
     error.value = '请选择 .txt 或 .md 文件'
     input.value = ''
     return
   }
+  if (validFiles.length > 1) {
+    batchFiles.value = validFiles
+    fileName.value = ''
+    error.value = ''
+    return
+  }
+  const selectedFile = validFiles[0]
   try {
+    batchFiles.value = []
     fileName.value = selectedFile.name
     title.value = title.value || titleFromFilename(selectedFile.name)
     text.value = await selectedFile.text()
@@ -125,14 +132,6 @@ async function selectJob(id: number) {
   selected.value = await api.getBatchJob(id)
   selectedItem.value = visibleQueueItems.value[0] ?? selected.value.items[0] ?? null
   editing.value = false
-}
-
-function onBatchFilesChange(event: Event) {
-  const input = event.target as HTMLInputElement
-  batchFiles.value = Array.from(input.files ?? []).filter(item => {
-    const name = item.name.toLowerCase()
-    return name.endsWith('.txt') || name.endsWith('.md')
-  })
 }
 
 async function uploadBatch() {
@@ -233,6 +232,11 @@ function titleFromFilename(name: string) {
   return name.replace(/\.(txt|md)$/i, '') || '未命名题目'
 }
 
+function isTextProblemFile(file: File) {
+  const name = file.name.toLowerCase()
+  return name.endsWith('.txt') || name.endsWith('.md')
+}
+
 onMounted(() => {
   loadJobs(false)
   timer = window.setInterval(() => loadJobs(true), 3000)
@@ -247,18 +251,14 @@ onUnmounted(() => {
   <header class="page-header">
     <div>
       <h1>题面分析</h1>
-      <p>单题分析、批量上传和队列管理集中在这里。</p>
+      <p>粘贴题面或选择 txt/md 文件，单个文件导入分析，多个文件加入任务队列。</p>
     </div>
   </header>
 
   <section class="analysis-workbench">
     <section class="grid">
-      <div class="segmented">
-        <button type="button" :class="{ active: mode === 'single' }" @click="mode = 'single'">单题分析</button>
-        <button type="button" :class="{ active: mode === 'batch' }" @click="mode = 'batch'">批量上传</button>
-      </div>
-
-      <form v-if="mode === 'single'" class="panel grid" @submit.prevent="analyzeText">
+      <form class="panel grid" @submit.prevent="analyzeText">
+        <h2 class="form-title">分析</h2>
         <label class="field">
           <span>题目标题</span>
           <input v-model="title" class="input" placeholder="例如：区间最大值" />
@@ -271,32 +271,26 @@ onUnmounted(() => {
           <button class="primary" type="submit" :disabled="loading || !text.trim()">
             <FileText :size="18" />开始分析
           </button>
-          <label class="secondary file-button">
-            <UploadCloud :size="18" />选择 .txt/.md
-            <input type="file" accept=".txt,.md" @change="onFileChange" />
+          <label class="secondary file-button batch-picker">
+            <UploadCloud :size="18" />选择 txt/md 文件
+            <input type="file" accept=".txt,.md" multiple @change="onFileChange" />
           </label>
           <span v-if="fileName" class="status">{{ fileName }} 已导入</span>
+          <span v-if="batchFiles.length > 1" class="status">{{ batchFiles.length }} 个文件待入队</span>
         </div>
-        <p v-if="error" class="error">{{ error }}</p>
-      </form>
 
-      <section v-else class="panel grid">
-        <label class="field">
+        <label v-if="batchFiles.length > 1" class="field compact-field">
           <span>任务名</span>
           <input v-model="batchName" class="input" />
         </label>
-        <label class="secondary file-button batch-picker">
-          <UploadCloud :size="18" />选择 title.txt/.md 文件
-          <input type="file" accept=".txt,.md" multiple @change="onBatchFilesChange" />
-        </label>
-        <div class="actions">
+        <div v-if="batchFiles.length > 1" class="actions">
           <button class="primary" type="button" :disabled="uploading || batchFiles.length === 0" @click="uploadBatch">
             上传并加入队列
           </button>
-          <span class="status">{{ batchFiles.length }} 个文件</span>
         </div>
+        <p v-if="error" class="error">{{ error }}</p>
         <p v-if="batchError" class="error">{{ batchError }}</p>
-      </section>
+      </form>
     </section>
 
     <aside class="panel task-rail">
@@ -317,7 +311,7 @@ onUnmounted(() => {
           <strong>{{ job.name }}</strong>
           <span>{{ job.successCount + job.failedCount }}/{{ job.totalCount }} · 等待 {{ job.pendingCount }} · 运行 {{ job.runningCount }}</span>
         </button>
-        <p v-if="jobs.length === 0" class="status">暂无任务，先批量上传题面。</p>
+        <p v-if="jobs.length === 0" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
       </div>
 
       <div v-if="selectedJob" class="progress">
@@ -489,26 +483,9 @@ onUnmounted(() => {
   background: #1f6f54;
 }
 
-.segmented {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 4px;
-  background: #e8ede8;
-  padding: 4px;
-  border-radius: 8px;
-}
-
-.segmented button {
-  border: 0;
-  border-radius: 6px;
-  padding: 10px;
-  background: transparent;
-}
-
-.segmented button.active {
-  background: white;
-  color: #1f6f54;
-  font-weight: 700;
+.form-title {
+  margin: 0;
+  font-size: 22px;
 }
 
 .file-button {
@@ -524,6 +501,10 @@ onUnmounted(() => {
 
 .batch-picker {
   width: max-content;
+}
+
+.compact-field {
+  max-width: 360px;
 }
 
 .editor {
