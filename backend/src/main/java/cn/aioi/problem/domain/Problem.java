@@ -62,6 +62,14 @@ public class Problem {
         this.createdBy = createdBy;
     }
 
+    public void update(String title, String description, DifficultyLevel difficulty, Set<String> tags, String source) {
+        this.title = title;
+        this.description = description;
+        this.difficulty = difficulty;
+        this.tags = new LinkedHashSet<>(tags);
+        this.source = source;
+    }
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {
@@ -101,4 +109,3 @@ public class Problem {
         return createdAt;
     }
 }
-

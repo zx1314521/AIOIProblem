@@ -5,8 +5,10 @@ import cn.aioi.problem.domain.DifficultyLevel;
 import cn.aioi.problem.domain.PassedProblem;
 import cn.aioi.problem.domain.Problem;
 import cn.aioi.problem.domain.User;
+import cn.aioi.problem.repository.BatchJobItemRepository;
 import cn.aioi.problem.repository.PassedProblemRepository;
 import cn.aioi.problem.repository.ProblemRepository;
+import cn.aioi.problem.repository.ProblemSetItemRepository;
 import jakarta.persistence.EntityNotFoundException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -21,10 +23,15 @@ import java.util.Set;
 public class ProblemService {
     private final ProblemRepository problems;
     private final PassedProblemRepository passedProblems;
+    private final ProblemSetItemRepository problemSetItems;
+    private final BatchJobItemRepository batchJobItems;
 
-    public ProblemService(ProblemRepository problems, PassedProblemRepository passedProblems) {
+    public ProblemService(ProblemRepository problems, PassedProblemRepository passedProblems,
+                          ProblemSetItemRepository problemSetItems, BatchJobItemRepository batchJobItems) {
         this.problems = problems;
         this.passedProblems = passedProblems;
+        this.problemSetItems = problemSetItems;
+        this.batchJobItems = batchJobItems;
     }
 
     public List<ProblemDtos.ProblemResponse> search(String keyword, String difficulty, String tag, User user) {
@@ -56,6 +63,19 @@ public class ProblemService {
         return ProblemDtos.ProblemResponse.from(problem, false);
     }
 
+    @Transactional
+    public ProblemDtos.ProblemResponse update(Long id, ProblemDtos.ProblemRequest request, User user) {
+        Problem problem = getProblem(id);
+        problem.update(
+                request.title().trim(),
+                request.description().trim(),
+                DifficultyLevel.fromLabelOrName(request.difficulty()),
+                sanitizeTags(request.tags()),
+                blankToNull(request.source())
+        );
+        return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem));
+    }
+
     public Problem getProblem(Long id) {
         return problems.findById(id).orElseThrow(() -> new EntityNotFoundException("题目不存在"));
     }
@@ -72,6 +92,15 @@ public class ProblemService {
             passedProblems.save(new PassedProblem(user, problem));
         }
         return ProblemDtos.ProblemResponse.from(problem, true);
+    }
+
+    @Transactional
+    public void delete(Long id) {
+        Problem problem = getProblem(id);
+        passedProblems.deleteByProblem(problem);
+        problemSetItems.deleteByProblem(problem);
+        batchJobItems.clearProblemReference(problem.getId());
+        problems.delete(problem);
     }
 
     static Set<String> sanitizeTags(Set<String> tags) {

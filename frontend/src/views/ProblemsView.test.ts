@@ -7,7 +7,10 @@ import type { Problem } from '../types'
 vi.mock('../services/api', () => ({
   api: {
     searchProblems: vi.fn(),
+    getProblem: vi.fn(),
     createProblem: vi.fn(),
+    updateProblem: vi.fn(),
+    deleteProblem: vi.fn(),
     markPassed: vi.fn()
   }
 }))
@@ -45,6 +48,7 @@ test('manages problems with sorting and create dialog', async () => {
     const titles = Array.from(document.querySelectorAll('.problem-row h3')).map(node => node.textContent)
     expect(titles).toEqual(['B 新题', 'A 旧题'])
   })
+  expect(screen.queryByText('旧题面')).toBeNull()
 
   await userEvent.click(screen.getByText('倒序'))
   await waitFor(() => {
@@ -52,6 +56,12 @@ test('manages problems with sorting and create dialog', async () => {
     expect(titles).toEqual(['A 旧题', 'B 新题'])
   })
 
+  vi.mocked(api.getProblem).mockResolvedValue(sampleProblems[0])
+  await userEvent.click(screen.getAllByText('查看')[0])
+  expect(await screen.findByRole('dialog')).toBeTruthy()
+  expect(await screen.findByText('旧题面')).toBeTruthy()
+
+  await userEvent.click(screen.getByTitle('关闭'))
   await userEvent.click(screen.getByText('新建题目'))
   expect(screen.getByRole('dialog')).toBeTruthy()
   expect(screen.getByPlaceholderText('题面描述')).toBeTruthy()

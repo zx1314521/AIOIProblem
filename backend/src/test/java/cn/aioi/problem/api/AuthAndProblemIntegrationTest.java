@@ -62,6 +62,32 @@ class AuthAndProblemIntegrationTest {
         );
         assertThat(passed.getBody()).isNotNull();
         assertThat(passed.getBody().passed()).isTrue();
+
+        ProblemDtos.ProblemRequest update = new ProblemDtos.ProblemRequest(
+                "最短路提高",
+                "更新后的题面。",
+                "CSPS提高",
+                Set.of("图论", "Dijkstra"),
+                "internal"
+        );
+        ResponseEntity<ProblemDtos.ProblemResponse> updated = rest.exchange(
+                "/api/problems/" + created.getBody().id(),
+                HttpMethod.PUT,
+                new HttpEntity<>(update, headers),
+                ProblemDtos.ProblemResponse.class
+        );
+        assertThat(updated.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(updated.getBody()).isNotNull();
+        assertThat(updated.getBody().title()).isEqualTo("最短路提高");
+        assertThat(updated.getBody().passed()).isTrue();
+
+        ResponseEntity<Void> deleted = rest.exchange(
+                "/api/problems/" + created.getBody().id(),
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                Void.class
+        );
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
     }
 
     private AuthDtos.AuthResponse register(String username) {
@@ -81,4 +107,3 @@ class AuthAndProblemIntegrationTest {
         return headers;
     }
 }
-

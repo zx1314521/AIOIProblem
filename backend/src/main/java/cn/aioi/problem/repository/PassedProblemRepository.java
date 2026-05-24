@@ -14,5 +14,6 @@ public interface PassedProblemRepository extends JpaRepository<PassedProblem, Lo
     Optional<PassedProblem> findByUserAndProblem(User user, Problem problem);
 
     List<PassedProblem> findByUser(User user);
-}
 
+    void deleteByProblem(Problem problem);
+}

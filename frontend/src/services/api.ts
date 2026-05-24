@@ -17,6 +17,9 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const text = await response.text()
     throw new Error(errorMessage(text, response.statusText))
   }
+  if (response.status === 204) {
+    return undefined as T
+  }
   return response.json() as Promise<T>
 }
 
@@ -42,8 +45,12 @@ export const api = {
     return request<AnalysisResponse>('/api/analysis/file', { method: 'POST', body: data })
   },
   searchProblems: (params: URLSearchParams) => request<Problem[]>(`/api/problems?${params.toString()}`),
+  getProblem: (id: number) => request<Problem>(`/api/problems/${id}`),
   createProblem: (problem: { title: string; description: string; difficulty: string; tags: string[]; source?: string }) =>
     request<Problem>('/api/problems', { method: 'POST', body: JSON.stringify(problem) }),
+  updateProblem: (id: number, problem: { title: string; description: string; difficulty: string; tags: string[]; source?: string }) =>
+    request<Problem>(`/api/problems/${id}`, { method: 'PUT', body: JSON.stringify(problem) }),
+  deleteProblem: (id: number) => request<void>(`/api/problems/${id}`, { method: 'DELETE' }),
   markPassed: (id: number) => request<Problem>(`/api/problems/${id}/passed`, { method: 'POST' }),
   listProblemSets: () => request<ProblemSet[]>('/api/problem-sets'),
   createProblemSet: (name: string, description: string) =>
