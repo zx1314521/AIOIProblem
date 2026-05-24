@@ -1,5 +1,5 @@
 import { authState, clearAuth } from './auth'
-import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse } from '../types'
+import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse, TagCatalog } from '../types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers)
@@ -45,6 +45,7 @@ export const api = {
     return request<AnalysisResponse>('/api/analysis/file', { method: 'POST', body: data })
   },
   searchProblems: (params: URLSearchParams) => request<Problem[]>(`/api/problems?${params.toString()}`),
+  getTags: () => request<TagCatalog>('/api/tags'),
   getProblem: (id: number) => request<Problem>(`/api/problems/${id}`),
   createProblem: (problem: { title: string; description: string; difficulty: string; tags: string[]; source?: string }) =>
     request<Problem>('/api/problems', { method: 'POST', body: JSON.stringify(problem) }),

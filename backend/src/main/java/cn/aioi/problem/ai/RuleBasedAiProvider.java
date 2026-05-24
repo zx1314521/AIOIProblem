@@ -15,12 +15,19 @@ public class RuleBasedAiProvider implements AiProvider {
         List<String> tags = new ArrayList<>();
         int score = 1;
 
-        score += tagIf(text, tags, "动态规划", "dp", "dynamic programming", "状态转移") ? 2 : 0;
-        score += tagIf(text, tags, "图论", "最短路", "树", "拓扑", "连通") ? 1 : 0;
-        score += tagIf(text, tags, "数据结构", "线段树", "树状数组", "堆", "并查集") ? 2 : 0;
-        score += tagIf(text, tags, "数学", "组合", "概率", "数论", "同余") ? 1 : 0;
-        score += tagIf(text, tags, "搜索", "dfs", "bfs", "回溯") ? 1 : 0;
-        score += tagIf(text, tags, "贪心", "greedy", "排序") ? 1 : 0;
+        score += tagIf(text, tags, "线性 DP", "dp", "dynamic programming", "动态规划", "状态转移") ? 2 : 0;
+        score += tagIf(text, tags, "最短路", "最短路", "最短路径", "dijkstra", "spfa") ? 1 : 0;
+        score += tagIf(text, tags, "图遍历", "图论", "图", "拓扑", "连通") ? 1 : 0;
+        score += tagIf(text, tags, "线段树", "线段树", "segment tree") ? 2 : 0;
+        score += tagIf(text, tags, "树状数组", "树状数组", "fenwick", "bit") ? 2 : 0;
+        score += tagIf(text, tags, "并查集", "并查集", "union find", "dsu") ? 2 : 0;
+        score += tagIf(text, tags, "排列组合", "组合", "排列") ? 1 : 0;
+        score += tagIf(text, tags, "期望", "概率", "期望") ? 1 : 0;
+        score += tagIf(text, tags, "最大公约数 gcd", "数论", "同余", "gcd") ? 1 : 0;
+        score += tagIf(text, tags, "深度优先搜索 DFS", "搜索", "dfs", "回溯") ? 1 : 0;
+        score += tagIf(text, tags, "广度优先搜索 BFS", "bfs", "广搜", "宽搜") ? 1 : 0;
+        score += tagIf(text, tags, "贪心", "贪心", "greedy") ? 1 : 0;
+        score += tagIf(text, tags, "排序", "排序", "sort") ? 1 : 0;
 
         if (text.contains("10^5") || text.contains("100000") || text.contains("1e5")) {
             score += 1;
@@ -54,11 +61,12 @@ public class RuleBasedAiProvider implements AiProvider {
     private boolean tagIf(String text, List<String> tags, String tag, String... keywords) {
         for (String keyword : keywords) {
             if (text.contains(keyword.toLowerCase(Locale.ROOT))) {
-                tags.add(tag);
+                if (!tags.contains(tag)) {
+                    tags.add(tag);
+                }
                 return true;
             }
         }
         return false;
     }
 }
-

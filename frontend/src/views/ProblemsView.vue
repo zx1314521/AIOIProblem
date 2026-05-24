@@ -5,14 +5,17 @@ import markdownItKatex from 'markdown-it-katex'
 import 'katex/dist/katex.min.css'
 import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, Eye, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
-import type { Problem } from '../types'
+import type { Problem, TagCategory } from '../types'
 import { normalizeProblemMath } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 
 const keyword = ref('')
 const difficulty = ref('')
-const tag = ref('')
+const selectedFilterTag = ref('')
+const tagSearch = ref('')
+const formTagSearch = ref('')
+const tagCategories = ref<TagCategory[]>([])
 const problems = ref<Problem[]>([])
 const error = ref('')
 const loading = ref(false)
@@ -29,7 +32,7 @@ const problemForm = ref({
   title: '',
   description: '',
   difficulty: '简单',
-  tags: '',
+  tags: [] as string[],
   source: ''
 })
 
@@ -42,6 +45,16 @@ const sortedProblems = computed(() => {
 })
 const formTitle = computed(() => formMode.value === 'create' ? '新建题目' : '编辑题目')
 const detailHtml = computed(() => markdown.render(normalizeProblemMath(selectedProblem.value?.description || '')))
+const filteredTagCategories = computed(() => filterCategories(tagSearch.value))
+const filteredFormTagCategories = computed(() => filterCategories(formTagSearch.value))
+
+async function loadCatalog() {
+  try {
+    tagCategories.value = (await api.getTags()).categories
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '标签库加载失败'
+  }
+}
 
 async function load() {
   loading.value = true
@@ -49,7 +62,7 @@ async function load() {
   const params = new URLSearchParams()
   if (keyword.value) params.set('keyword', keyword.value)
   if (difficulty.value) params.set('difficulty', difficulty.value)
-  if (tag.value) params.set('tag', tag.value)
+  if (selectedFilterTag.value) params.set('tag', selectedFilterTag.value)
   try {
     problems.value = await api.searchProblems(params)
   } catch (err) {
@@ -62,7 +75,8 @@ async function load() {
 function openCreate() {
   formMode.value = 'create'
   editingProblemId.value = null
-  problemForm.value = { title: '', description: '', difficulty: '简单', tags: '', source: '' }
+  problemForm.value = { title: '', description: '', difficulty: '简单', tags: [], source: '' }
+  formTagSearch.value = ''
   formOpen.value = true
 }
 
@@ -74,9 +88,10 @@ function openEdit(problem: Problem) {
     title: problem.title,
     description: problem.description,
     difficulty: problem.difficulty,
-    tags: problem.tags.join(' '),
+    tags: [...problem.tags],
     source: problem.source || ''
   }
+  formTagSearch.value = ''
   formOpen.value = true
 }
 
@@ -91,7 +106,7 @@ async function saveProblem() {
     title: problemForm.value.title.trim(),
     description: problemForm.value.description.trim(),
     difficulty: problemForm.value.difficulty,
-    tags: parseTags(problemForm.value.tags),
+    tags: problemForm.value.tags,
     source: problemForm.value.source.trim() || undefined
   }
   try {
@@ -132,7 +147,7 @@ async function togglePassed(problem: Problem) {
 }
 
 async function deleteProblem(problem: Problem) {
-  const confirmed = window.confirm(`确定删除「${problem.title}」吗？删除后会从题库和题单中移除。`)
+  const confirmed = window.confirm(`确定删除《${problem.title}》吗？删除后会从题库和题单中移除。`)
   if (!confirmed) return
   error.value = ''
   try {
@@ -161,8 +176,27 @@ function compareProblem(a: Problem, b: Problem) {
   return Date.parse(a.createdAt) - Date.parse(b.createdAt)
 }
 
-function parseTags(value: string) {
-  return value.split(/[,，\s]+/).map(item => item.trim()).filter(Boolean)
+function filterCategories(query: string) {
+  const cleaned = query.trim().toLowerCase()
+  if (!cleaned) {
+    return tagCategories.value
+  }
+  return tagCategories.value
+    .map(category => ({
+      name: category.name,
+      tags: category.tags.filter(tag => tag.toLowerCase().includes(cleaned) || category.name.toLowerCase().includes(cleaned))
+    }))
+    .filter(category => category.tags.length > 0)
+}
+
+function chooseFilterTag(value: string) {
+  selectedFilterTag.value = selectedFilterTag.value === value ? '' : value
+}
+
+function toggleFormTag(value: string) {
+  problemForm.value.tags = problemForm.value.tags.includes(value)
+    ? problemForm.value.tags.filter(tag => tag !== value)
+    : [...problemForm.value.tags, value]
 }
 
 function formatDate(value: string) {
@@ -170,7 +204,10 @@ function formatDate(value: string) {
     .format(new Date(value))
 }
 
-onMounted(load)
+onMounted(async () => {
+  await loadCatalog()
+  await load()
+})
 </script>
 
 <template>
@@ -191,9 +228,30 @@ onMounted(load)
         <option value="">全部难度</option>
         <option v-for="item in difficulties" :key="item">{{ item }}</option>
       </select>
-      <input v-model="tag" class="input" placeholder="标签" @keyup.enter="load" />
+      <input v-model="tagSearch" class="input" placeholder="搜索标准标签" />
       <button class="primary" type="button" @click="load"><Search :size="18" />搜索</button>
     </div>
+
+    <div class="tag-picker">
+      <button v-if="selectedFilterTag" class="tag-choice active" type="button" @click="chooseFilterTag(selectedFilterTag)">
+        {{ selectedFilterTag }} <X :size="14" />
+      </button>
+      <div v-for="category in filteredTagCategories" :key="category.name" class="tag-group">
+        <span class="tag-group-title">{{ category.name }}</span>
+        <button
+          v-for="item in category.tags"
+          :key="item"
+          class="tag-choice"
+          :class="{ active: selectedFilterTag === item }"
+          type="button"
+          :aria-label="`选择标签 ${item}`"
+          @click="chooseFilterTag(item)"
+        >
+          {{ item }}
+        </button>
+      </div>
+    </div>
+
     <div class="manage-bar">
       <label class="inline-field">
         <span>排序</span>
@@ -298,7 +356,28 @@ onMounted(load)
             <select v-model="problemForm.difficulty" class="select">
               <option v-for="item in difficulties" :key="item">{{ item }}</option>
             </select>
-            <input v-model="problemForm.tags" class="input" placeholder="标签，用空格或逗号分隔" />
+            <input v-model="formTagSearch" class="input" placeholder="搜索并选择标准标签" />
+          </div>
+          <div v-if="problemForm.tags.length" class="tag-row">
+            <button v-for="item in problemForm.tags" :key="item" class="tag-choice active" type="button" @click="toggleFormTag(item)">
+              {{ item }} <X :size="14" />
+            </button>
+          </div>
+          <div class="tag-picker form-tag-picker">
+            <div v-for="category in filteredFormTagCategories" :key="category.name" class="tag-group">
+              <span class="tag-group-title">{{ category.name }}</span>
+              <button
+                v-for="item in category.tags"
+                :key="item"
+                class="tag-choice"
+                :class="{ active: problemForm.tags.includes(item) }"
+                type="button"
+                :aria-label="`选择标签 ${item}`"
+                @click="toggleFormTag(item)"
+              >
+                {{ item }}
+              </button>
+            </div>
           </div>
           <input v-model="problemForm.source" class="input" placeholder="来源，可选" />
           <div class="actions">
@@ -334,7 +413,8 @@ onMounted(load)
 
 .inline-field span,
 .muted,
-.modal-subtitle {
+.modal-subtitle,
+.tag-group-title {
   color: #617069;
   font-size: 14px;
 }
@@ -349,6 +429,55 @@ h2 {
 
 .management-panel {
   padding: 18px;
+}
+
+.tag-picker {
+  display: grid;
+  gap: 10px;
+  max-height: 230px;
+  overflow: auto;
+  padding: 12px;
+  margin: 10px 0;
+  border: 1px solid #e3e9e2;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.form-tag-picker {
+  max-height: 260px;
+}
+
+.tag-group {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.tag-group-title {
+  min-width: 104px;
+  padding-top: 7px;
+  font-weight: 700;
+}
+
+.tag-choice {
+  min-height: 30px;
+  border: 1px solid #d9e2da;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #33443b;
+  padding: 6px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+}
+
+.tag-choice.active {
+  border-color: #1f6f54;
+  background: #e9f4ee;
+  color: #17684f;
+  font-weight: 700;
 }
 
 .count-chip {

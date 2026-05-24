@@ -1,6 +1,7 @@
 package cn.aioi.problem.ai;
 
 import cn.aioi.problem.domain.DifficultyLevel;
+import cn.aioi.problem.service.TagCatalogService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.stereotype.Component;
@@ -11,9 +12,11 @@ import java.util.List;
 @Component
 public class AiAssessmentParser {
     private final ObjectMapper objectMapper;
+    private final TagCatalogService tagCatalog;
 
-    public AiAssessmentParser(ObjectMapper objectMapper) {
+    public AiAssessmentParser(ObjectMapper objectMapper, TagCatalogService tagCatalog) {
         this.objectMapper = objectMapper;
+        this.tagCatalog = tagCatalog;
     }
 
     public AiAssessment parse(String raw) {
@@ -26,7 +29,7 @@ public class AiAssessmentParser {
             }
             DifficultyLevel difficulty = DifficultyLevel.fromLabelOrName(node.path("difficulty").asText());
             double confidence = node.path("confidence").asDouble(0.65);
-            List<String> tags = readArray(node.path("tags"));
+            List<String> tags = tagCatalog.normalizeAiTags(readArray(node.path("tags")));
             List<String> hints = readArray(node.path("hints"));
             String summary = node.path("reasoningSummary").asText("基于题面综合判断。");
             return new AiAssessment(difficulty, confidence, tags, hints, summary);

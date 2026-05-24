@@ -1,11 +1,12 @@
 package cn.aioi.problem.ai;
 
+import cn.aioi.problem.service.TagCatalogService;
 import org.springframework.stereotype.Component;
 
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Locale;
@@ -15,10 +16,12 @@ import java.util.concurrent.TimeUnit;
 public class CodexCliAiProvider {
     private final AiProperties properties;
     private final AiAssessmentParser parser;
+    private final TagCatalogService tagCatalog;
 
-    public CodexCliAiProvider(AiProperties properties, AiAssessmentParser parser) {
+    public CodexCliAiProvider(AiProperties properties, AiAssessmentParser parser, TagCatalogService tagCatalog) {
         this.properties = properties;
         this.parser = parser;
+        this.tagCatalog = tagCatalog;
     }
 
     public AiAssessment assess(ProblemInput input) {
@@ -71,8 +74,7 @@ public class CodexCliAiProvider {
         return """
                 请分析下面的信息学竞赛题目，只输出 JSON：
                 {"difficulty":"入门|简单|CSPJ中等|CSPS提高|NOIP困难|地狱NOI","confidence":0.0,"tags":[],"hints":[],"reasoningSummary":""}
-                题目：
-                """ + input.title() + "\n\n" + input.text();
+                """ + tagCatalog.promptText() + "\n题目：\n" + input.title() + "\n\n" + input.text();
     }
 
     private Process startProcess(String command, String prompt, Path outputFile) throws java.io.IOException {

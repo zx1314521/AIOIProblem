@@ -25,13 +25,16 @@ public class ProblemService {
     private final PassedProblemRepository passedProblems;
     private final ProblemSetItemRepository problemSetItems;
     private final BatchJobItemRepository batchJobItems;
+    private final TagCatalogService tagCatalog;
 
     public ProblemService(ProblemRepository problems, PassedProblemRepository passedProblems,
-                          ProblemSetItemRepository problemSetItems, BatchJobItemRepository batchJobItems) {
+                          ProblemSetItemRepository problemSetItems, BatchJobItemRepository batchJobItems,
+                          TagCatalogService tagCatalog) {
         this.problems = problems;
         this.passedProblems = passedProblems;
         this.problemSetItems = problemSetItems;
         this.batchJobItems = batchJobItems;
+        this.tagCatalog = tagCatalog;
     }
 
     public List<ProblemDtos.ProblemResponse> search(String keyword, String difficulty, String tag, User user) {
@@ -39,7 +42,7 @@ public class ProblemService {
                 ? null
                 : DifficultyLevel.fromLabelOrName(difficulty);
         String normalizedKeyword = lowerOrNull(keyword);
-        String normalizedTag = lowerOrNull(tag);
+        String normalizedTag = normalizeSearchTag(tag);
         return problems.findAllWithTags().stream()
                 .filter(problem -> matchesKeyword(problem, normalizedKeyword))
                 .filter(problem -> parsedDifficulty == null || problem.getDifficulty() == parsedDifficulty)
@@ -51,7 +54,7 @@ public class ProblemService {
 
     @Transactional
     public ProblemDtos.ProblemResponse create(ProblemDtos.ProblemRequest request, User user) {
-        Set<String> tags = sanitizeTags(request.tags());
+        Set<String> tags = sanitizeTags(request.tags(), tagCatalog);
         Problem problem = problems.save(new Problem(
                 request.title().trim(),
                 request.description().trim(),
@@ -70,7 +73,7 @@ public class ProblemService {
                 request.title().trim(),
                 request.description().trim(),
                 DifficultyLevel.fromLabelOrName(request.difficulty()),
-                sanitizeTags(request.tags()),
+                sanitizeTags(request.tags(), tagCatalog),
                 blankToNull(request.source())
         );
         return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem));
@@ -110,17 +113,41 @@ public class ProblemService {
         problems.delete(problem);
     }
 
-    static Set<String> sanitizeTags(Set<String> tags) {
+    static Set<String> sanitizeTags(Set<String> tags, TagCatalogService tagCatalog) {
         if (tags == null) {
             return Set.of();
         }
         Set<String> clean = new LinkedHashSet<>();
+        List<String> invalid = new java.util.ArrayList<>();
         tags.stream()
-                .map(String::trim)
-                .filter(tag -> !tag.isBlank())
                 .limit(12)
-                .forEach(clean::add);
+                .forEach(tag -> {
+                    if (tag == null || tag.trim().isBlank()) {
+                        invalid.add("空标签");
+                        return;
+                    }
+                    String trimmed = tag.trim();
+                    if (tagCatalog.isStandardTag(trimmed)) {
+                        clean.add(trimmed);
+                    } else {
+                        invalid.add(trimmed);
+                    }
+                });
+        if (!invalid.isEmpty()) {
+            throw new IllegalArgumentException("未知标签：" + String.join("、", invalid));
+        }
         return clean;
+    }
+
+    private String normalizeSearchTag(String tag) {
+        String cleaned = blankToNull(tag);
+        if (cleaned == null) {
+            return null;
+        }
+        if (!tagCatalog.isStandardTag(cleaned)) {
+            throw new IllegalArgumentException("未知标签：" + cleaned);
+        }
+        return cleaned.toLowerCase(Locale.ROOT);
     }
 
     private static String blankToNull(String value) {

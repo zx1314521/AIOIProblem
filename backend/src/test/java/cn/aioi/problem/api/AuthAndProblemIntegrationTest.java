@@ -33,7 +33,7 @@ class AuthAndProblemIntegrationTest {
                 "最短路入门",
                 "给定一张图，求从 1 到 n 的最短路。",
                 "CSPJ中等",
-                Set.of("图论", "最短路"),
+                Set.of("最短路", "图遍历"),
                 "internal"
         );
 
@@ -48,7 +48,7 @@ class AuthAndProblemIntegrationTest {
         assertThat(created.getBody().difficulty()).isEqualTo("CSPJ中等");
 
         ResponseEntity<ProblemDtos.ProblemResponse[]> searched = rest.exchange(
-                "/api/problems?tag=图论",
+                "/api/problems?tag=最短路",
                 HttpMethod.GET,
                 new HttpEntity<>(headers),
                 ProblemDtos.ProblemResponse[].class
@@ -95,7 +95,7 @@ class AuthAndProblemIntegrationTest {
                 "最短路提高",
                 "更新后的题面。",
                 "CSPS提高",
-                Set.of("图论", "Dijkstra"),
+                Set.of("最短路", "网络流"),
                 "internal"
         );
         ResponseEntity<ProblemDtos.ProblemResponse> updated = rest.exchange(
@@ -116,6 +116,29 @@ class AuthAndProblemIntegrationTest {
                 Void.class
         );
         assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+    }
+
+    @Test
+    void rejectsManualCategoryAndUnknownTags() {
+        AuthDtos.AuthResponse auth = register("bob");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
+                "非法标签",
+                "题面",
+                "简单",
+                Set.of("图论", "未知标签"),
+                "internal"
+        );
+
+        ResponseEntity<String> response = rest.exchange(
+                "/api/problems",
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("未知标签");
     }
 
     private AuthDtos.AuthResponse register(String username) {

@@ -40,6 +40,15 @@ export interface SimilarProblem {
   reason: string
 }
 
+export interface TagCategory {
+  name: string
+  tags: string[]
+}
+
+export interface TagCatalog {
+  categories: TagCategory[]
+}
+
 export interface ProblemSet {
   id: number
   name: string
