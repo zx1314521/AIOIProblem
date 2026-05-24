@@ -11,7 +11,11 @@ import java.util.Optional;
 public interface BatchJobItemRepository extends JpaRepository<BatchJobItem, Long> {
     List<BatchJobItem> findByJobOrderByIdAsc(BatchJob job);
 
+    List<BatchJobItem> findByJobOrderBySortOrderAscIdAsc(BatchJob job);
+
     Optional<BatchJobItem> findFirstByJobAndStatusOrderByIdAsc(BatchJob job, BatchItemStatus status);
+
+    Optional<BatchJobItem> findFirstByJobAndStatusOrderBySortOrderAscIdAsc(BatchJob job, BatchItemStatus status);
 
     long countByJobAndStatus(BatchJob job, BatchItemStatus status);
 }

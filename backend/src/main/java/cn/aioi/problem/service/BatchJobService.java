@@ -27,7 +27,7 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
-import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
@@ -79,7 +79,7 @@ public class BatchJobService {
             if (!filename.toLowerCase().endsWith(".txt")) {
                 throw new IllegalArgumentException("仅支持 .txt 文件：" + filename);
             }
-            items.save(new BatchJobItem(job, titleFromFilename(filename), readUtf8(file)));
+            items.save(new BatchJobItem(job, titleFromFilename(filename), readUtf8(file), (int) items.countByJobAndStatus(job, BatchItemStatus.PENDING)));
         }
         triggerWorkerAfterCommit();
         return detail(job.getId(), user);
@@ -97,8 +97,7 @@ public class BatchJobService {
         BatchJob job = ownedJob(id, user);
         return new BatchDtos.BatchJobDetailResponse(
                 toJobResponse(job),
-                items.findByJobOrderByIdAsc(job).stream()
-                        .sorted(Comparator.comparing(BatchJobItem::getId))
+                items.findByJobOrderBySortOrderAscIdAsc(job).stream()
                         .map(this::toItemResponse)
                         .toList()
         );
@@ -117,6 +116,42 @@ public class BatchJobService {
         job.resume();
         triggerWorkerAfterCommit();
         return toJobResponse(job);
+    }
+
+    @Transactional
+    public BatchDtos.BatchItemResponse updateItem(Long jobId, Long itemId, BatchDtos.BatchItemUpdateRequest request, User user) {
+        BatchJob job = ownedJob(jobId, user);
+        BatchJobItem item = ownedItem(job, itemId);
+        item.updatePending(request.title().trim(), request.content().trim());
+        return toItemResponse(item);
+    }
+
+    @Transactional
+    public BatchDtos.BatchJobDetailResponse deleteItem(Long jobId, Long itemId, User user) {
+        BatchJob job = ownedJob(jobId, user);
+        BatchJobItem item = ownedItem(job, itemId);
+        if (item.getStatus() != BatchItemStatus.PENDING) {
+            throw new IllegalStateException("只有等待中的任务可以删除");
+        }
+        items.delete(item);
+        job.decrementTotalCount();
+        completeJobIfDone(job);
+        return detail(jobId, user);
+    }
+
+    @Transactional
+    public BatchDtos.BatchJobDetailResponse reorderItems(Long jobId, BatchDtos.BatchItemReorderRequest request, User user) {
+        BatchJob job = ownedJob(jobId, user);
+        Set<Long> seen = new HashSet<>();
+        int index = 0;
+        for (Long itemId : request.itemIds()) {
+            if (!seen.add(itemId)) {
+                throw new IllegalArgumentException("任务排序列表包含重复项");
+            }
+            BatchJobItem item = ownedItem(job, itemId);
+            item.setSortOrder(index++);
+        }
+        return detail(jobId, user);
     }
 
     public void triggerWorker() {
@@ -159,7 +194,7 @@ public class BatchJobService {
 
     private Optional<Long> nextPendingItemId() {
         for (BatchJob job : jobs.findByStatusOrderByCreatedAtAsc(BatchJobStatus.RUNNING)) {
-            Optional<BatchJobItem> item = items.findFirstByJobAndStatusOrderByIdAsc(job, BatchItemStatus.PENDING);
+            Optional<BatchJobItem> item = items.findFirstByJobAndStatusOrderBySortOrderAscIdAsc(job, BatchItemStatus.PENDING);
             if (item.isPresent()) {
                 item.get().start();
                 return Optional.of(item.get().getId());
@@ -218,6 +253,14 @@ public class BatchJobService {
         return jobs.findByIdAndOwner(id, user).orElseThrow(() -> new EntityNotFoundException("批量任务不存在"));
     }
 
+    private BatchJobItem ownedItem(BatchJob job, Long itemId) {
+        BatchJobItem item = items.findById(itemId).orElseThrow(() -> new EntityNotFoundException("任务项不存在"));
+        if (!item.getJob().getId().equals(job.getId())) {
+            throw new EntityNotFoundException("任务项不存在");
+        }
+        return item;
+    }
+
     private BatchDtos.BatchJobResponse toJobResponse(BatchJob job) {
         return new BatchDtos.BatchJobResponse(
                 job.getId(),
@@ -236,7 +279,9 @@ public class BatchJobService {
         return new BatchDtos.BatchItemResponse(
                 item.getId(),
                 item.getTitle(),
+                item.getContent(),
                 item.getStatus().name(),
+                item.getSortOrder(),
                 item.getProblemId(),
                 item.getErrorMessage(),
                 item.getCreatedAt()

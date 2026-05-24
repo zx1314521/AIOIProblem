@@ -36,6 +36,9 @@ public class BatchJobItem {
     @Column(nullable = false, length = 24)
     private BatchItemStatus status;
 
+    @Column(nullable = false)
+    private int sortOrder;
+
     private Long problemId;
 
     @Column(columnDefinition = "TEXT")
@@ -51,10 +54,15 @@ public class BatchJobItem {
     }
 
     public BatchJobItem(BatchJob job, String title, String content) {
+        this(job, title, content, 0);
+    }
+
+    public BatchJobItem(BatchJob job, String title, String content, int sortOrder) {
         this.job = job;
         this.title = title;
         this.content = content;
         this.status = BatchItemStatus.PENDING;
+        this.sortOrder = sortOrder;
     }
 
     @PrePersist
@@ -81,6 +89,23 @@ public class BatchJobItem {
         finishedAt = Instant.now();
     }
 
+    public void updatePending(String title, String content) {
+        ensurePending();
+        this.title = title;
+        this.content = content;
+    }
+
+    public void setSortOrder(int sortOrder) {
+        ensurePending();
+        this.sortOrder = sortOrder;
+    }
+
+    private void ensurePending() {
+        if (status != BatchItemStatus.PENDING) {
+            throw new IllegalStateException("只有等待中的任务可以修改");
+        }
+    }
+
     public Long getId() {
         return id;
     }
@@ -101,6 +126,10 @@ public class BatchJobItem {
         return status;
     }
 
+    public int getSortOrder() {
+        return sortOrder;
+    }
+
     public Long getProblemId() {
         return problemId;
     }
@@ -113,4 +142,3 @@ public class BatchJobItem {
         return createdAt;
     }
 }
-

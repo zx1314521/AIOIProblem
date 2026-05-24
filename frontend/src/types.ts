@@ -84,7 +84,9 @@ export interface BatchJob {
 export interface BatchItem {
   id: number
   title: string
+  content: string
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  sortOrder: number
   problemId?: number
   errorMessage?: string
   createdAt: string

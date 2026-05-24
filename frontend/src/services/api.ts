@@ -1,5 +1,5 @@
 import { authState, clearAuth } from './auth'
-import type { AiSettings, AnalysisResponse, AuthResponse, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse } from '../types'
+import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse } from '../types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers)
@@ -66,5 +66,11 @@ export const api = {
   listBatchJobs: () => request<BatchJob[]>('/api/batch-jobs'),
   getBatchJob: (id: number) => request<BatchJobDetail>(`/api/batch-jobs/${id}`),
   pauseBatchJob: (id: number) => request<BatchJob>(`/api/batch-jobs/${id}/pause`, { method: 'POST' }),
-  resumeBatchJob: (id: number) => request<BatchJob>(`/api/batch-jobs/${id}/resume`, { method: 'POST' })
+  resumeBatchJob: (id: number) => request<BatchJob>(`/api/batch-jobs/${id}/resume`, { method: 'POST' }),
+  updateBatchItem: (jobId: number, itemId: number, payload: { title: string; content: string }) =>
+    request<BatchItem>(`/api/batch-jobs/${jobId}/items/${itemId}`, { method: 'PATCH', body: JSON.stringify(payload) }),
+  deleteBatchItem: (jobId: number, itemId: number) =>
+    request<BatchJobDetail>(`/api/batch-jobs/${jobId}/items/${itemId}`, { method: 'DELETE' }),
+  reorderBatchItems: (jobId: number, itemIds: number[]) =>
+    request<BatchJobDetail>(`/api/batch-jobs/${jobId}/items/reorder`, { method: 'POST', body: JSON.stringify({ itemIds }) })
 }

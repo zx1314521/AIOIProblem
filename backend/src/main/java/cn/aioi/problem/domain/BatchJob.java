@@ -96,6 +96,13 @@ public class BatchJob {
         updatedAt = Instant.now();
     }
 
+    public void decrementTotalCount() {
+        if (totalCount > 0) {
+            totalCount -= 1;
+            updatedAt = Instant.now();
+        }
+    }
+
     public Long getId() {
         return id;
     }
