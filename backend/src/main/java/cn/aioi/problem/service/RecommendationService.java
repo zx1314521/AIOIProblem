@@ -8,6 +8,7 @@ import cn.aioi.problem.domain.User;
 import cn.aioi.problem.repository.PassedProblemRepository;
 import cn.aioi.problem.repository.ProblemRepository;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
 import java.util.HashMap;
@@ -27,6 +28,7 @@ public class RecommendationService {
         this.passedProblems = passedProblems;
     }
 
+    @Transactional(readOnly = true)
     public RecommendationDtos.RecommendationResponse recommend(User user) {
         List<PassedProblem> passed = passedProblems.findByUser(user);
         Set<Long> passedIds = passed.stream().map(item -> item.getProblem().getId()).collect(Collectors.toSet());

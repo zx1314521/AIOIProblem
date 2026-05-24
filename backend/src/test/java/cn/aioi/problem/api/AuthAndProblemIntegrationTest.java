@@ -2,6 +2,7 @@ package cn.aioi.problem.api;
 
 import cn.aioi.problem.api.dto.AuthDtos;
 import cn.aioi.problem.api.dto.ProblemDtos;
+import cn.aioi.problem.api.dto.RecommendationDtos;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
@@ -62,6 +63,15 @@ class AuthAndProblemIntegrationTest {
         );
         assertThat(passed.getBody()).isNotNull();
         assertThat(passed.getBody().passed()).isTrue();
+
+        ResponseEntity<RecommendationDtos.RecommendationResponse> recommendations = rest.exchange(
+                "/api/recommendations",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                RecommendationDtos.RecommendationResponse.class
+        );
+        assertThat(recommendations.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(recommendations.getBody()).isNotNull();
 
         ResponseEntity<ProblemDtos.ProblemResponse> unpassed = rest.exchange(
                 "/api/problems/" + created.getBody().id() + "/passed",
