@@ -356,6 +356,14 @@ function chooseFilterTag(value: string) {
     : [...selectedFilterTags.value, value]
 }
 
+function clearFilters() {
+  keyword.value = ''
+  difficulty.value = ''
+  selectedFilterTags.value = []
+  tagSearch.value = ''
+  load()
+}
+
 function toggleFormTag(value: string) {
   problemForm.value.tags = problemForm.value.tags.includes(value)
     ? problemForm.value.tags.filter(tag => tag !== value)
@@ -400,29 +408,51 @@ onMounted(async () => {
 </script>
 
 <template>
-  <header class="page-header">
+  <header class="page-header compact-page-header">
     <div>
       <h1>题目管理</h1>
-      <p>检索、排序和维护题库，并标注已通过。</p>
+      <p>题库检索、维护、批量操作</p>
     </div>
-    <button class="primary" type="button" @click="openCreate">
+    <button class="primary compact-create" type="button" @click="openCreate">
       <Plus :size="18" />新建题目
     </button>
   </header>
 
-  <section class="panel management-panel">
-    <div class="toolbar">
-      <input v-model="keyword" class="input" placeholder="关键词" @keyup.enter="load" />
-      <select v-model="difficulty" class="select">
-        <option value="">全部难度</option>
-        <option v-for="item in difficulties" :key="item">{{ item }}</option>
-      </select>
-      <input v-model="tagSearch" class="input" placeholder="搜索标准标签" />
-      <button class="primary" type="button" @click="load"><Search :size="18" />搜索</button>
-    </div>
+  <section class="management-panel compact-management">
+    <div class="filter-strip">
+      <div class="filter-line">
+        <span class="filter-label">难度</span>
+        <button
+          class="tab-pill"
+          type="button"
+          :class="{ active: difficulty === '' }"
+          @click="difficulty = ''; load()"
+        >
+          全部
+        </button>
+        <button
+          v-for="item in difficulties"
+          :key="item"
+          class="tab-pill"
+          type="button"
+          :class="{ active: difficulty === item }"
+          @click="difficulty = item; load()"
+        >
+          {{ item }}
+        </button>
+      </div>
 
-    <div class="tag-picker">
-      <div v-if="selectedFilterTags.length" class="selected-filter-tags">
+      <div class="filter-line search-line">
+        <span class="filter-label">筛选</span>
+        <input v-model="keyword" class="input compact-input keyword-input" placeholder="关键词" @keyup.enter="load" />
+        <input v-model="tagSearch" class="input compact-input tag-input" placeholder="搜索标准标签" />
+        <button class="primary compact-search" type="button" @click="load"><Search :size="16" />搜索</button>
+        <button class="plain-link" type="button" @click="clearFilters">清除筛选</button>
+      </div>
+
+      <div class="filter-line selected-line">
+        <span class="filter-label">已选</span>
+        <span v-if="!selectedFilterTags.length" class="selected-empty">暂无，可在下方选择算法标签</span>
         <button
           v-for="item in selectedFilterTags"
           :key="item"
@@ -431,9 +461,12 @@ onMounted(async () => {
           :aria-label="`移除筛选标签 ${item}`"
           @click="chooseFilterTag(item)"
         >
-          {{ item }} <X :size="14" />
+          {{ item }} <X :size="13" />
         </button>
       </div>
+    </div>
+
+    <div class="tag-picker compact-tag-picker">
       <div v-for="category in filteredTagCategories" :key="category.name" class="tag-group">
         <span class="tag-group-title">{{ category.name }}</span>
         <button
@@ -450,31 +483,31 @@ onMounted(async () => {
       </div>
     </div>
 
-    <div class="manage-bar">
-      <label class="inline-field">
+    <div class="result-toolbar">
+      <div class="result-count">共计 <strong>{{ sortedProblems.length }}</strong> 条结果</div>
+      <label class="inline-field compact-sort">
         <span>排序</span>
-        <select v-model="sortKey" class="select">
+        <select v-model="sortKey" class="select compact-select">
           <option value="createdAt">创建时间</option>
           <option value="title">题目标题</option>
           <option value="difficulty">难度</option>
         </select>
       </label>
-      <button class="secondary" type="button" @click="toggleSortDirection">
-        <component :is="sortDirection === 'asc' ? ArrowUpAZ : ArrowDownAZ" :size="18" />
+      <button class="ghost compact-tool" type="button" @click="toggleSortDirection">
+        <component :is="sortDirection === 'asc' ? ArrowUpAZ : ArrowDownAZ" :size="15" />
         {{ sortDirection === 'asc' ? '正序' : '倒序' }}
       </button>
       <button
-        class="secondary select-mode-button"
+        class="secondary compact-tool select-mode-button"
         type="button"
         :disabled="!sortedProblems.length"
         @click="selectionMode ? toggleAllVisible() : startSelectionMode()"
       >
-        <ListChecks :size="18" />{{ selectionMode ? (allVisibleSelected ? '取消全选' : '全选当前') : '选择' }}
+        <ListChecks :size="15" />{{ selectionMode ? (allVisibleSelected ? '取消全选' : '全选当前') : '选择' }}
       </button>
-      <button v-if="selectionMode" class="ghost" type="button" @click="clearSelection">
-        <X :size="18" />退出选择
+      <button v-if="selectionMode" class="ghost compact-tool" type="button" @click="clearSelection">
+        <X :size="15" />退出选择
       </button>
-      <span class="count-chip">{{ sortedProblems.length }} 题</span>
     </div>
     <div v-if="selectedProblemIds.length" class="bulk-bar" aria-live="polite">
       <strong>已选 {{ selectedProblemIds.length }} 题</strong>
@@ -495,7 +528,16 @@ onMounted(async () => {
       </div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
-    <div class="problem-list">
+    <div class="problem-list compact-problem-list">
+      <div v-if="sortedProblems.length" class="problem-table-head" :class="{ selecting: selectionMode }">
+        <span v-if="selectionMode"></span>
+        <span>状态</span>
+        <span>题号</span>
+        <span>题目名称</span>
+        <span>标签</span>
+        <span>难度</span>
+        <span>操作</span>
+      </div>
       <article
         v-for="problem in sortedProblems"
         :key="problem.id"
@@ -513,30 +555,33 @@ onMounted(async () => {
             @change="toggleProblemSelection(problem.id)"
           />
         </label>
-        <div class="problem-main">
-          <header>
+        <div class="status-cell" :class="{ passed: problem.passed }">{{ problem.passed ? '✓' : '－' }}</div>
+        <div class="id-cell">P{{ problem.id }}</div>
+        <div class="problem-main title-cell">
+          <header class="problem-title-line">
             <h3>{{ problem.title }}</h3>
-            <span class="difficulty">{{ problem.difficulty }}</span>
           </header>
-          <div class="tag-row">
-            <span v-for="item in problem.tags" :key="item" class="tag">{{ item }}</span>
-            <span v-if="problem.passed" class="tag passed-tag">已通过</span>
-            <span v-if="selectedFilterTags.length" class="match-chip">{{ relevanceLabel(problem) }}</span>
-            <span class="muted">{{ formatDate(problem.createdAt) }}</span>
-          </div>
+          <span v-if="selectedFilterTags.length" class="match-chip">{{ relevanceLabel(problem) }}</span>
+          <span class="muted">{{ formatDate(problem.createdAt) }}</span>
+        </div>
+        <div class="tag-row tags-cell">
+          <span v-for="item in problem.tags" :key="item" class="tag">{{ item }}</span>
+        </div>
+        <div class="difficulty-cell">
+          <span class="difficulty">{{ problem.difficulty }}</span>
         </div>
         <div class="row-actions" @click.stop>
-          <button class="ghost" type="button" title="查看题面" @click="viewProblem(problem)">
-            <Eye :size="17" />查看
+          <button class="ghost icon-action" type="button" title="查看题面" @click="viewProblem(problem)">
+            <Eye :size="15" />查看
           </button>
-          <button class="ghost" type="button" title="编辑题目" @click="openEdit(problem)">
-            <Pencil :size="17" />编辑
+          <button class="ghost icon-action" type="button" title="编辑题目" @click="openEdit(problem)">
+            <Pencil :size="15" />编辑
           </button>
-          <button class="ghost pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
-            <CheckCircle2 :size="17" />{{ problem.passed ? '已通过' : '通过' }}
+          <button class="ghost icon-action pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
+            <CheckCircle2 :size="15" />{{ problem.passed ? '已通过' : '通过' }}
           </button>
-          <button class="ghost danger" type="button" title="删除题目" @click="deleteProblem(problem)">
-            <Trash2 :size="17" />删除
+          <button class="ghost icon-action danger" type="button" title="删除题目" @click="deleteProblem(problem)">
+            <Trash2 :size="15" />删除
           </button>
         </div>
       </article>
@@ -1012,6 +1057,444 @@ h2 {
 
   .bulk-actions {
     justify-content: flex-start;
+  }
+}
+
+/* Compact OI library draft: flatter, denser, closer to table scanning. */
+.compact-page-header {
+  margin-bottom: 10px;
+  align-items: center;
+}
+
+.compact-page-header h1 {
+  font-size: 22px;
+  font-weight: 800;
+}
+
+.compact-page-header p {
+  margin-top: 3px;
+  font-size: 13px;
+  color: #7b8791;
+}
+
+.compact-create,
+.compact-search,
+.compact-tool,
+.icon-action {
+  min-height: 30px;
+  border-radius: 4px;
+  padding: 7px 10px;
+  font-size: 13px;
+  box-shadow: none;
+}
+
+.compact-management {
+  padding: 0;
+  border: 1px solid #d9dee5;
+  border-radius: 4px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08);
+  overflow: hidden;
+}
+
+.filter-strip {
+  display: grid;
+  gap: 9px;
+  padding: 16px 20px 14px;
+  border-bottom: 1px solid #e4e7eb;
+  background: #fbfcfd;
+}
+
+.filter-line {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 30px;
+}
+
+.filter-label {
+  width: 62px;
+  flex: 0 0 62px;
+  color: #222831;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.tab-pill {
+  min-height: 28px;
+  border: 0;
+  border-radius: 3px;
+  background: transparent;
+  color: #1f2937;
+  padding: 5px 9px;
+  font-size: 14px;
+}
+
+.tab-pill:hover,
+.tab-pill.active {
+  background: #e4f2fb;
+  color: #2386d1;
+}
+
+.tab-pill.active {
+  font-weight: 700;
+}
+
+.search-line {
+  align-items: center;
+}
+
+.compact-input,
+.compact-select {
+  height: 32px;
+  border-radius: 3px;
+  padding: 6px 10px;
+  background: #ffffff;
+  font-size: 14px;
+}
+
+.keyword-input {
+  width: min(360px, 100%);
+}
+
+.tag-input {
+  width: min(220px, 100%);
+}
+
+.plain-link {
+  border: 0;
+  background: transparent;
+  color: #2c7dcc;
+  padding: 5px 4px;
+  font-size: 13px;
+}
+
+.plain-link:hover {
+  text-decoration: underline;
+}
+
+.selected-line {
+  color: #7b8791;
+  font-size: 13px;
+}
+
+.selected-empty {
+  color: #a0a8b1;
+}
+
+.compact-tag-picker {
+  max-height: 128px;
+  margin: 0;
+  padding: 10px 20px 12px;
+  border: 0;
+  border-bottom: 1px solid #e4e7eb;
+  border-radius: 0;
+  background: #ffffff;
+  gap: 8px;
+}
+
+.tag-group {
+  gap: 6px;
+}
+
+.tag-group-title {
+  min-width: 86px;
+  padding-top: 4px;
+  color: #6b7280;
+  font-size: 13px;
+}
+
+.tag-choice {
+  min-height: 24px;
+  border-radius: 12px;
+  padding: 3px 8px;
+  background: #ffffff;
+  color: #4b5563;
+  font-size: 12px;
+}
+
+.tag-choice.active {
+  background: #eaf5ff;
+  border-color: #58a7df;
+  color: #1677bd;
+}
+
+.result-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 20px;
+  border-bottom: 1px solid #e4e7eb;
+  background: #f6f7f9;
+}
+
+.result-count {
+  margin-right: auto;
+  color: #64748b;
+  font-size: 14px;
+}
+
+.result-count strong {
+  color: #111827;
+  font-weight: 800;
+}
+
+.compact-sort {
+  gap: 6px;
+}
+
+.compact-sort span {
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.compact-sort .select {
+  width: 128px;
+  min-width: 128px;
+}
+
+.bulk-bar {
+  margin: 0;
+  padding: 10px 20px;
+  border-width: 0 0 1px;
+  border-radius: 0;
+  background: #fff7df;
+}
+
+.bulk-actions .secondary,
+.bulk-actions .ghost {
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 6px 9px;
+  font-size: 12px;
+  box-shadow: none;
+}
+
+.compact-problem-list {
+  gap: 0;
+}
+
+.problem-table-head,
+.problem-row-compact {
+  display: grid;
+  grid-template-columns: 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 220px;
+  align-items: center;
+}
+
+.problem-table-head.selecting,
+.problem-row-compact.selecting-row {
+  grid-template-columns: 36px 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 220px;
+}
+
+.problem-table-head {
+  min-height: 38px;
+  padding: 0 20px;
+  border-bottom: 1px solid #dfe3e8;
+  color: #334155;
+  background: #ffffff;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.problem-row-compact {
+  gap: 0;
+  min-height: 42px;
+  padding: 0 20px;
+  border: 0;
+  border-bottom: 1px solid #e5e7eb;
+  border-radius: 0;
+  background: #ffffff;
+  box-shadow: none;
+}
+
+.problem-row-compact:hover,
+.problem-row-compact:focus-visible {
+  border-color: #e5e7eb;
+  background: #f8fbff;
+  box-shadow: none;
+}
+
+.select-cell {
+  width: 22px;
+  height: 22px;
+  justify-self: start;
+}
+
+.select-cell input {
+  width: 15px;
+  height: 15px;
+}
+
+.status-cell {
+  color: #6b7280;
+  font-size: 18px;
+  line-height: 1;
+  font-weight: 800;
+}
+
+.status-cell.passed {
+  color: #37b24d;
+}
+
+.id-cell {
+  color: #334155;
+  font-family: Consolas, "Microsoft YaHei UI", monospace;
+  font-size: 14px;
+}
+
+.title-cell {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.problem-title-line h3 {
+  color: #2680d9;
+  font-size: 15px;
+  font-weight: 500;
+  line-height: 1.35;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.problem-main {
+  gap: 0;
+}
+
+.muted {
+  font-size: 12px;
+  color: #9aa4b2;
+  white-space: nowrap;
+}
+
+.tags-cell {
+  min-width: 0;
+  gap: 4px;
+  overflow: hidden;
+}
+
+.tag {
+  border-color: #274db2;
+  border-radius: 3px;
+  background: #274db2;
+  color: #ffffff;
+  padding: 2px 6px;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.difficulty-cell {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.difficulty {
+  border-radius: 3px;
+  padding: 4px 8px;
+  background: #ffaf24;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 800;
+}
+
+.match-chip {
+  border: 0;
+  border-radius: 3px;
+  background: #eaf5ff;
+  color: #1677bd;
+  padding: 3px 6px;
+  font-size: 12px;
+}
+
+.row-actions {
+  justify-content: flex-end;
+  gap: 5px;
+}
+
+.icon-action {
+  background: transparent;
+  border: 1px solid transparent;
+  color: #4b5563;
+}
+
+.icon-action:hover {
+  background: #edf2f7;
+  border-color: #dbe2ea;
+}
+
+.pass-toggle.passed {
+  background: #f1f8f3;
+  color: #2f9e44;
+  border-color: #d6ecdc;
+}
+
+.modal-panel {
+  border-radius: 4px;
+}
+
+@media (max-width: 1120px) {
+  .problem-table-head,
+  .problem-row-compact {
+    grid-template-columns: 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px;
+  }
+
+  .problem-table-head.selecting,
+  .problem-row-compact.selecting-row {
+    grid-template-columns: 30px 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px;
+  }
+
+  .problem-table-head span:last-child,
+  .row-actions {
+    display: none;
+  }
+}
+
+@media (max-width: 760px) {
+  .filter-line,
+  .result-toolbar {
+    align-items: stretch;
+  }
+
+  .filter-label {
+    width: 100%;
+    flex-basis: 100%;
+  }
+
+  .keyword-input,
+  .tag-input {
+    width: 100%;
+  }
+
+  .problem-table-head {
+    display: none;
+  }
+
+  .problem-row-compact,
+  .problem-row-compact.selecting-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+    padding: 12px 14px;
+  }
+
+  .select-cell,
+  .status-cell,
+  .id-cell,
+  .difficulty-cell {
+    justify-self: start;
+  }
+
+  .title-cell {
+    flex-wrap: wrap;
+  }
+
+  .row-actions {
+    display: flex;
+    justify-content: flex-start;
+    grid-column: auto;
   }
 }
 </style>
