@@ -2,6 +2,7 @@ package cn.aioi.problem.service;
 
 import cn.aioi.problem.ai.AiAssessment;
 import cn.aioi.problem.ai.AiProvider;
+import cn.aioi.problem.ai.AiRuntimeSettings;
 import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.api.dto.BatchDtos;
 import cn.aioi.problem.domain.BatchItemStatus;
@@ -42,19 +43,22 @@ public class BatchJobService {
     private final ProblemRepository problems;
     private final UserRepository users;
     private final AiProvider aiProvider;
+    private final AiSettingsService aiSettingsService;
     private final TagCatalogService tagCatalog;
     private final TransactionTemplate transactionTemplate;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
 
     public BatchJobService(BatchJobRepository jobs, BatchJobItemRepository items, ProblemRepository problems,
-                           UserRepository users, AiProvider aiProvider, TagCatalogService tagCatalog,
+                           UserRepository users, AiProvider aiProvider, AiSettingsService aiSettingsService,
+                           TagCatalogService tagCatalog,
                            PlatformTransactionManager transactionManager) {
         this.jobs = jobs;
         this.items = items;
         this.problems = problems;
         this.users = users;
         this.aiProvider = aiProvider;
+        this.aiSettingsService = aiSettingsService;
         this.tagCatalog = tagCatalog;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
@@ -216,8 +220,11 @@ public class BatchJobService {
         if (workItem == null) {
             return;
         }
+        AiRuntimeSettings runtime = aiSettingsService.runtimeSettings();
+        long started = System.nanoTime();
         try {
             AiAssessment assessment = aiProvider.assess(new ProblemInput(workItem.title(), workItem.content()));
+            long durationMs = elapsedMs(started);
             transactionTemplate.executeWithoutResult(status -> {
                 BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
                 User owner = users.getReferenceById(workItem.ownerId());
@@ -229,14 +236,23 @@ public class BatchJobService {
                         "批量导入",
                         owner
                 ));
+                item.completeAnalysisMetadata(
+                        runtime.providerLabel(),
+                        modelLabel(runtime),
+                        assessment.confidence(),
+                        assessment.reasoningSummary(),
+                        encodeHints(assessment.hints()),
+                        durationMs
+                );
                 item.succeed(problem.getId());
                 item.getJob().incrementSuccess();
                 completeJobIfDone(item.getJob());
             });
         } catch (RuntimeException exception) {
+            long durationMs = elapsedMs(started);
             transactionTemplate.executeWithoutResult(status -> {
                 BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
-                item.fail(exception.getMessage());
+                item.fail(exception.getMessage(), runtime.providerLabel(), modelLabel(runtime), durationMs);
                 item.getJob().incrementFailed();
                 completeJobIfDone(item.getJob());
             });
@@ -290,8 +306,49 @@ public class BatchJobService {
                 problem.map(value -> value.getDifficulty().name()).orElse(null),
                 problem.map(value -> value.getTags().stream().sorted().toList()).orElse(List.of()),
                 item.getErrorMessage(),
-                item.getCreatedAt()
+                item.getCreatedAt(),
+                item.getStartedAt(),
+                item.getFinishedAt(),
+                item.getAiProvider(),
+                item.getAiModel(),
+                item.getAiConfidence(),
+                item.getAiReasoningSummary(),
+                decodeHints(item.getAiHints()),
+                item.getAiDurationMs()
         );
+    }
+
+    private String modelLabel(AiRuntimeSettings runtime) {
+        return switch (runtime.provider()) {
+            case "deepseek" -> runtime.deepSeekModel();
+            case "codex" -> runtime.codexCommand();
+            case "mock" -> "本地规则模型";
+            default -> runtime.provider();
+        };
+    }
+
+    private long elapsedMs(long started) {
+        return java.time.Duration.ofNanos(System.nanoTime() - started).toMillis();
+    }
+
+    private String encodeHints(List<String> hints) {
+        if (hints == null || hints.isEmpty()) {
+            return "";
+        }
+        return hints.stream()
+                .map(hint -> hint.replace("\r", " ").replace("\n", " ").trim())
+                .filter(hint -> !hint.isBlank())
+                .collect(java.util.stream.Collectors.joining("\n"));
+    }
+
+    private List<String> decodeHints(String hints) {
+        if (hints == null || hints.isBlank()) {
+            return List.of();
+        }
+        return hints.lines()
+                .map(String::trim)
+                .filter(line -> !line.isBlank())
+                .toList();
     }
 
     private String readUtf8(MultipartFile file) {

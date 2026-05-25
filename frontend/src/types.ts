@@ -102,6 +102,14 @@ export interface BatchItem {
   tags: string[]
   errorMessage?: string
   createdAt: string
+  startedAt?: string
+  finishedAt?: string
+  aiProvider?: string
+  aiModel?: string
+  aiConfidence?: number
+  aiReasoningSummary?: string
+  aiHints?: string[]
+  aiDurationMs?: number
 }
 
 export interface BatchJobDetail {

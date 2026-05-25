@@ -50,6 +50,22 @@ public class BatchJobItem {
     private Instant startedAt;
     private Instant finishedAt;
 
+    @Column(length = 80)
+    private String aiProvider;
+
+    @Column(length = 160)
+    private String aiModel;
+
+    private Double aiConfidence;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiReasoningSummary;
+
+    @Column(columnDefinition = "TEXT")
+    private String aiHints;
+
+    private Long aiDurationMs;
+
     protected BatchJobItem() {
     }
 
@@ -83,10 +99,27 @@ public class BatchJobItem {
         finishedAt = Instant.now();
     }
 
+    public void completeAnalysisMetadata(String aiProvider, String aiModel, double aiConfidence,
+                                         String aiReasoningSummary, String aiHints, long aiDurationMs) {
+        this.aiProvider = aiProvider;
+        this.aiModel = aiModel;
+        this.aiConfidence = aiConfidence;
+        this.aiReasoningSummary = aiReasoningSummary;
+        this.aiHints = aiHints;
+        this.aiDurationMs = aiDurationMs;
+    }
+
     public void fail(String errorMessage) {
         status = BatchItemStatus.FAILED;
         this.errorMessage = errorMessage;
         finishedAt = Instant.now();
+    }
+
+    public void fail(String errorMessage, String aiProvider, String aiModel, long aiDurationMs) {
+        this.aiProvider = aiProvider;
+        this.aiModel = aiModel;
+        this.aiDurationMs = aiDurationMs;
+        fail(errorMessage);
     }
 
     public void updatePending(String title, String content) {
@@ -140,5 +173,37 @@ public class BatchJobItem {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getStartedAt() {
+        return startedAt;
+    }
+
+    public Instant getFinishedAt() {
+        return finishedAt;
+    }
+
+    public String getAiProvider() {
+        return aiProvider;
+    }
+
+    public String getAiModel() {
+        return aiModel;
+    }
+
+    public Double getAiConfidence() {
+        return aiConfidence;
+    }
+
+    public String getAiReasoningSummary() {
+        return aiReasoningSummary;
+    }
+
+    public String getAiHints() {
+        return aiHints;
+    }
+
+    public Long getAiDurationMs() {
+        return aiDurationMs;
     }
 }

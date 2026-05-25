@@ -13,6 +13,7 @@ public record AiRuntimeSettings(
         return switch (provider) {
             case "deepseek" -> "DeepSeek API";
             case "codex" -> "Codex CLI";
+            case "mock" -> "本地规则模型";
             default -> "AI Provider";
         };
     }

@@ -34,7 +34,15 @@ public final class BatchDtos {
             String difficultyCode,
             List<String> tags,
             String errorMessage,
-            Instant createdAt
+            Instant createdAt,
+            Instant startedAt,
+            Instant finishedAt,
+            String aiProvider,
+            String aiModel,
+            Double aiConfidence,
+            String aiReasoningSummary,
+            List<String> aiHints,
+            Long aiDurationMs
     ) {
     }
 
