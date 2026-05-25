@@ -3,9 +3,9 @@ import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from 'markdown-it-katex'
 import 'katex/dist/katex.min.css'
-import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, Eye, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
+import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Eye, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
-import type { Problem, TagCategory } from '../types'
+import type { Problem, ProblemSet, TagCategory } from '../types'
 import { normalizeProblemMath } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
@@ -27,6 +27,13 @@ const detailOpen = ref(false)
 const selectedProblem = ref<Problem | null>(null)
 const sortKey = ref<'createdAt' | 'title' | 'difficulty'>('createdAt')
 const sortDirection = ref<'asc' | 'desc'>('desc')
+const selectionMode = ref(false)
+const selectedProblemIds = ref<number[]>([])
+const bulkSaving = ref(false)
+const bulkSetOpen = ref(false)
+const problemSets = ref<ProblemSet[]>([])
+const selectedSetId = ref<number | ''>('')
+const newSetName = ref('')
 
 const problemForm = ref({
   title: '',
@@ -47,6 +54,15 @@ const detailHtml = computed(() => markdown.render(normalizeProblemMath(selectedP
 const filteredTagCategories = computed(() => filterCategories(tagSearch.value))
 const filteredFormTagCategories = computed(() => filterCategories(formTagSearch.value))
 const selectedFilterTagSet = computed(() => new Set(selectedFilterTags.value))
+const selectedProblemIdSet = computed(() => new Set(selectedProblemIds.value))
+const selectedProblems = computed(() => {
+  const ids = selectedProblemIdSet.value
+  return problems.value.filter(problem => ids.has(problem.id))
+})
+const allVisibleSelected = computed(() => {
+  return sortedProblems.value.length > 0 && sortedProblems.value.every(problem => selectedProblemIdSet.value.has(problem.id))
+})
+const selectedPreview = computed(() => selectedProblems.value.slice(0, 3).map(problem => `《${problem.title}》`).join('、'))
 const relatedFilterTagSet = computed(() => {
   const related = new Set<string>()
   for (const tag of selectedFilterTags.value) {
@@ -80,6 +96,7 @@ async function load() {
   selectedFilterTags.value.forEach(tag => params.append('tags', tag))
   try {
     problems.value = await api.searchProblems(params)
+    selectedProblemIds.value = selectedProblemIds.value.filter(id => problems.value.some(problem => problem.id === id))
   } catch (err) {
     error.value = err instanceof Error ? err.message : '搜索失败'
   } finally {
@@ -161,6 +178,127 @@ async function togglePassed(problem: Problem) {
   }
 }
 
+function toggleProblemSelection(id: number) {
+  selectedProblemIds.value = selectedProblemIdSet.value.has(id)
+    ? selectedProblemIds.value.filter(item => item !== id)
+    : [...selectedProblemIds.value, id]
+}
+
+function startSelectionMode() {
+  selectionMode.value = true
+}
+
+function toggleAllVisible() {
+  selectionMode.value = true
+  if (allVisibleSelected.value) {
+    const visibleIds = new Set(sortedProblems.value.map(problem => problem.id))
+    selectedProblemIds.value = selectedProblemIds.value.filter(id => !visibleIds.has(id))
+    return
+  }
+  const merged = new Set(selectedProblemIds.value)
+  sortedProblems.value.forEach(problem => merged.add(problem.id))
+  selectedProblemIds.value = [...merged]
+}
+
+function clearSelection() {
+  selectedProblemIds.value = []
+  selectionMode.value = false
+}
+
+function syncUpdatedProblems(updatedProblems: Problem[]) {
+  const updatedMap = new Map(updatedProblems.map(problem => [problem.id, problem]))
+  problems.value = problems.value.map(problem => updatedMap.get(problem.id) ?? problem)
+  if (selectedProblem.value) {
+    selectedProblem.value = updatedMap.get(selectedProblem.value.id) ?? selectedProblem.value
+  }
+}
+
+async function bulkMarkPassed() {
+  if (!selectedProblemIds.value.length) return
+  bulkSaving.value = true
+  error.value = ''
+  try {
+    const updated = await api.markProblemsPassed(selectedProblemIds.value)
+    syncUpdatedProblems(updated)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '批量标注失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function bulkDelete() {
+  if (!selectedProblemIds.value.length) return
+  const summary = selectedPreview.value ? `：${selectedPreview.value}${selectedProblems.value.length > 3 ? ' 等' : ''}` : ''
+  const confirmed = window.confirm(`确定删除已选 ${selectedProblemIds.value.length} 题${summary}？删除后会从题库和题单中移除。`)
+  if (!confirmed) return
+  const ids = [...selectedProblemIds.value]
+  bulkSaving.value = true
+  error.value = ''
+  try {
+    await api.deleteProblems(ids)
+    const idSet = new Set(ids)
+    problems.value = problems.value.filter(problem => !idSet.has(problem.id))
+    if (selectedProblem.value && idSet.has(selectedProblem.value.id)) {
+      detailOpen.value = false
+      selectedProblem.value = null
+    }
+    clearSelection()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '批量删除失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function openBulkSetDialog() {
+  if (!selectedProblemIds.value.length) return
+  bulkSaving.value = true
+  error.value = ''
+  try {
+    problemSets.value = await api.listProblemSets()
+    selectedSetId.value = problemSets.value[0]?.id ?? ''
+    newSetName.value = ''
+    bulkSetOpen.value = true
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '题单加载失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function addSelectedToExistingSet() {
+  if (!selectedProblemIds.value.length || selectedSetId.value === '') return
+  bulkSaving.value = true
+  error.value = ''
+  try {
+    await api.addProblemsToSet(Number(selectedSetId.value), selectedProblemIds.value)
+    bulkSetOpen.value = false
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '添加到题单失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function createSetAndAddSelected() {
+  const name = newSetName.value.trim()
+  if (!name) {
+    error.value = '请填写题单名称'
+    return
+  }
+  bulkSaving.value = true
+  error.value = ''
+  try {
+    await api.createProblemSetWithProblems(name, '题目管理批量创建', selectedProblemIds.value)
+    bulkSetOpen.value = false
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '新建题单失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
 async function deleteProblem(problem: Problem) {
   const confirmed = window.confirm(`确定删除《${problem.title}》吗？删除后会从题库和题单中移除。`)
   if (!confirmed) return
@@ -168,6 +306,7 @@ async function deleteProblem(problem: Problem) {
   try {
     await api.deleteProblem(problem.id)
     problems.value = problems.value.filter(item => item.id !== problem.id)
+    selectedProblemIds.value = selectedProblemIds.value.filter(id => id !== problem.id)
     if (selectedProblem.value?.id === problem.id) {
       detailOpen.value = false
       selectedProblem.value = null
@@ -324,7 +463,36 @@ onMounted(async () => {
         <component :is="sortDirection === 'asc' ? ArrowUpAZ : ArrowDownAZ" :size="18" />
         {{ sortDirection === 'asc' ? '正序' : '倒序' }}
       </button>
+      <button
+        class="secondary select-mode-button"
+        type="button"
+        :disabled="!sortedProblems.length"
+        @click="selectionMode ? toggleAllVisible() : startSelectionMode()"
+      >
+        <ListChecks :size="18" />{{ selectionMode ? (allVisibleSelected ? '取消全选' : '全选当前') : '选择' }}
+      </button>
+      <button v-if="selectionMode" class="ghost" type="button" @click="clearSelection">
+        <X :size="18" />退出选择
+      </button>
       <span class="count-chip">{{ sortedProblems.length }} 题</span>
+    </div>
+    <div v-if="selectedProblemIds.length" class="bulk-bar" aria-live="polite">
+      <strong>已选 {{ selectedProblemIds.length }} 题</strong>
+      <span v-if="selectedPreview" class="bulk-preview">{{ selectedPreview }}{{ selectedProblems.length > 3 ? ' 等' : '' }}</span>
+      <div class="bulk-actions">
+        <button class="secondary" type="button" :disabled="bulkSaving" @click="bulkMarkPassed">
+          <CheckCircle2 :size="18" />批量通过
+        </button>
+        <button class="secondary" type="button" :disabled="bulkSaving" @click="openBulkSetDialog">
+          <FolderPlus :size="18" />加入题单
+        </button>
+        <button class="ghost danger" type="button" :disabled="bulkSaving" @click="bulkDelete">
+          <Trash2 :size="18" />批量删除
+        </button>
+        <button class="ghost" type="button" :disabled="bulkSaving" @click="clearSelection">
+          <X :size="18" />清空
+        </button>
+      </div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
     <div class="problem-list">
@@ -332,10 +500,19 @@ onMounted(async () => {
         v-for="problem in sortedProblems"
         :key="problem.id"
         class="problem-row problem-row-compact"
+        :class="{ 'selecting-row': selectionMode }"
         tabindex="0"
         @click="viewProblem(problem)"
         @keyup.enter="viewProblem(problem)"
       >
+        <label v-if="selectionMode" class="select-cell" @click.stop>
+          <input
+            type="checkbox"
+            :checked="selectedProblemIdSet.has(problem.id)"
+            :aria-label="`选择题目 ${problem.title}`"
+            @change="toggleProblemSelection(problem.id)"
+          />
+        </label>
         <div class="problem-main">
           <header>
             <h3>{{ problem.title }}</h3>
@@ -367,6 +544,43 @@ onMounted(async () => {
       <p v-if="!loading && sortedProblems.length === 0" class="status">暂无题目。</p>
     </div>
   </section>
+
+  <Teleport to="body">
+    <div v-if="bulkSetOpen" class="modal-backdrop" @click.self="bulkSetOpen = false">
+      <section class="modal-panel set-modal" role="dialog" aria-modal="true" aria-labelledby="bulk-set-title">
+        <header class="modal-header">
+          <div>
+            <h2 id="bulk-set-title">加入题单</h2>
+            <p class="modal-subtitle">已选 {{ selectedProblemIds.length }} 题，可以加入已有题单，也可以新建题单后加入。</p>
+          </div>
+          <button class="icon-only" type="button" title="关闭" @click="bulkSetOpen = false">
+            <X :size="18" />
+          </button>
+        </header>
+        <div class="set-actions">
+          <section class="set-action-block">
+            <h3>已有题单</h3>
+            <select v-model="selectedSetId" class="select" :disabled="!problemSets.length">
+              <option v-if="!problemSets.length" value="">暂无题单</option>
+              <option v-for="set in problemSets" :key="set.id" :value="set.id">
+                {{ set.name }}（{{ set.problems.length }} 题）
+              </option>
+            </select>
+            <button class="primary" type="button" :disabled="bulkSaving || selectedSetId === ''" @click="addSelectedToExistingSet">
+              <FolderPlus :size="18" />添加到已有题单
+            </button>
+          </section>
+          <section class="set-action-block">
+            <h3>创建新题单</h3>
+            <input v-model="newSetName" class="input" placeholder="输入新题单名称" @keyup.enter="createSetAndAddSelected" />
+            <button class="secondary" type="button" :disabled="bulkSaving || !newSetName.trim()" @click="createSetAndAddSelected">
+              <Plus :size="18" />新建题单并加入
+            </button>
+          </section>
+        </div>
+      </section>
+    </div>
+  </Teleport>
 
   <Teleport to="body">
     <div v-if="detailOpen && selectedProblem" class="modal-backdrop" @click.self="detailOpen = false">
@@ -559,13 +773,49 @@ h2 {
   font-weight: 700;
 }
 
+.bulk-bar {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 12px;
+  margin: -6px 0 16px;
+  padding: 12px;
+  border: 1px solid #b9d5c8;
+  border-radius: 8px;
+  background: #eff8f3;
+}
+
+.bulk-bar strong {
+  color: #143d30;
+}
+
+.bulk-preview {
+  min-width: 0;
+  color: #567065;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.bulk-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+}
+
 .problem-row-compact {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
-  gap: 20px;
+  gap: 14px;
   align-items: center;
   cursor: pointer;
   transition: border-color 0.16s ease, background 0.16s ease, box-shadow 0.16s ease;
+}
+
+.problem-row-compact.selecting-row {
+  grid-template-columns: 32px minmax(0, 1fr) auto;
 }
 
 .problem-row-compact:hover,
@@ -584,6 +834,21 @@ h2 {
 
 .problem-main header {
   justify-content: flex-start;
+}
+
+.select-cell {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  cursor: pointer;
+}
+
+.select-cell input {
+  width: 18px;
+  height: 18px;
+  accent-color: #1f6f54;
+  cursor: pointer;
 }
 
 .row-actions {
@@ -651,6 +916,10 @@ h2 {
   width: min(980px, 100%);
 }
 
+.set-modal {
+  width: min(720px, 100%);
+}
+
 .modal-header {
   display: flex;
   align-items: flex-start;
@@ -698,19 +967,51 @@ h2 {
   gap: 10px;
 }
 
+.set-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+}
+
+.set-action-block {
+  display: grid;
+  gap: 12px;
+  align-content: start;
+  padding: 14px;
+  border: 1px solid #e3e9e2;
+  border-radius: 8px;
+  background: #fbfcfa;
+}
+
+.set-action-block h3 {
+  margin: 0;
+  font-size: 16px;
+}
+
 @media (max-width: 900px) {
   .problem-row-compact {
     grid-template-columns: 1fr;
   }
 
+  .problem-row-compact.selecting-row {
+    grid-template-columns: 32px 1fr;
+  }
+
   .row-actions {
     justify-content: flex-start;
+    grid-column: 2;
   }
 }
 
 @media (max-width: 760px) {
-  .modal-fields {
+  .modal-fields,
+  .set-actions,
+  .bulk-bar {
     grid-template-columns: 1fr;
+  }
+
+  .bulk-actions {
+    justify-content: flex-start;
   }
 }
 </style>

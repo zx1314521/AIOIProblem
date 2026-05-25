@@ -60,6 +60,12 @@ public class ProblemController {
         return problemService.markPassed(id, principal.user());
     }
 
+    @PostMapping("/bulk/passed")
+    List<ProblemDtos.ProblemResponse> markPassedBulk(@Valid @RequestBody ProblemDtos.BulkProblemRequest request,
+                                                     @AuthenticationPrincipal UserPrincipal principal) {
+        return problemService.markPassedBulk(request.problemIds(), principal.user());
+    }
+
     @DeleteMapping("/{id}/passed")
     ProblemDtos.ProblemResponse unmarkPassed(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
         return problemService.unmarkPassed(id, principal.user());
@@ -69,5 +75,11 @@ public class ProblemController {
     @ResponseStatus(HttpStatus.NO_CONTENT)
     void delete(@PathVariable Long id) {
         problemService.delete(id);
+    }
+
+    @DeleteMapping("/bulk")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    void deleteBulk(@Valid @RequestBody ProblemDtos.BulkProblemRequest request) {
+        problemService.deleteBulk(request.problemIds());
     }
 }

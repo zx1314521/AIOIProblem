@@ -100,6 +100,13 @@ public class ProblemService {
     }
 
     @Transactional
+    public List<ProblemDtos.ProblemResponse> markPassedBulk(List<Long> ids, User user) {
+        return distinctIds(ids).stream()
+                .map(id -> markPassed(id, user))
+                .toList();
+    }
+
+    @Transactional
     public ProblemDtos.ProblemResponse unmarkPassed(Long id, User user) {
         Problem problem = getProblem(id);
         passedProblems.findByUserAndProblem(user, problem).ifPresent(passedProblems::delete);
@@ -113,6 +120,11 @@ public class ProblemService {
         problemSetItems.deleteByProblem(problem);
         batchJobItems.clearProblemReference(problem.getId());
         problems.delete(problem);
+    }
+
+    @Transactional
+    public void deleteBulk(List<Long> ids) {
+        distinctIds(ids).forEach(this::delete);
     }
 
     static Set<String> sanitizeTags(Set<String> tags, TagCatalogService tagCatalog) {
@@ -187,6 +199,12 @@ public class ProblemService {
     private static String lowerOrNull(String value) {
         String cleaned = blankToNull(value);
         return cleaned == null ? null : cleaned.toLowerCase(Locale.ROOT);
+    }
+
+    private static List<Long> distinctIds(List<Long> ids) {
+        return ids.stream()
+                .distinct()
+                .toList();
     }
 
     private boolean matchesKeyword(Problem problem, String keyword) {

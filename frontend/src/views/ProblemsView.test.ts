@@ -11,9 +11,15 @@ vi.mock('../services/api', () => ({
     createProblem: vi.fn(),
     updateProblem: vi.fn(),
     deleteProblem: vi.fn(),
+    deleteProblems: vi.fn(),
     markPassed: vi.fn(),
+    markProblemsPassed: vi.fn(),
     unmarkPassed: vi.fn(),
-    getTags: vi.fn()
+    getTags: vi.fn(),
+    listProblemSets: vi.fn(),
+    createProblemSet: vi.fn(),
+    createProblemSetWithProblems: vi.fn(),
+    addProblemsToSet: vi.fn()
   }
 }))
 
@@ -169,5 +175,70 @@ test('selects standard tags in problem form instead of typing them', async () =>
 
   await waitFor(() => {
     expect(api.createProblem).toHaveBeenCalledWith(expect.objectContaining({ tags: ['最短路'] }))
+  })
+})
+
+test('bulk selects problems and applies passed/delete/set actions', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+  vi.mocked(api.markProblemsPassed).mockResolvedValue(sampleProblems.map(problem => ({ ...problem, passed: true })))
+  vi.mocked(api.deleteProblems).mockResolvedValue(undefined)
+  vi.mocked(api.listProblemSets).mockResolvedValue([
+    { id: 9, name: '训练题单', description: '', createdAt: '2026-05-24T00:00:00', problems: [] }
+  ])
+  vi.mocked(api.addProblemsToSet).mockResolvedValue({
+    id: 9,
+    name: '训练题单',
+    description: '',
+    createdAt: '2026-05-24T00:00:00',
+    problems: sampleProblems
+  })
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+  render(ProblemsView)
+
+  expect(screen.queryByRole('checkbox', { name: new RegExp(sampleProblems[0].title) })).toBeNull()
+  await userEvent.click(await screen.findByRole('button', { name: '选择' }))
+  await userEvent.click(await screen.findByRole('checkbox', { name: new RegExp(sampleProblems[0].title) }))
+  await userEvent.click(screen.getByRole('checkbox', { name: new RegExp(sampleProblems[1].title) }))
+
+  await userEvent.click(screen.getByRole('button', { name: /批量通过/ }))
+  await waitFor(() => {
+    expect(api.markProblemsPassed).toHaveBeenCalledWith([1, 2])
+  })
+
+  await userEvent.click(screen.getByRole('button', { name: /加入题单/ }))
+  await screen.findByRole('dialog')
+  await userEvent.click(screen.getByRole('button', { name: /添加到已有题单/ }))
+  await waitFor(() => {
+    expect(api.addProblemsToSet).toHaveBeenCalledWith(9, [1, 2])
+  })
+
+  await userEvent.click(screen.getByRole('button', { name: /批量删除/ }))
+  await waitFor(() => {
+    expect(api.deleteProblems).toHaveBeenCalledWith([1, 2])
+  })
+})
+
+test('creates a new problem set from selected problems', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+  vi.mocked(api.listProblemSets).mockResolvedValue([])
+  vi.mocked(api.createProblemSetWithProblems).mockResolvedValue({
+    id: 10,
+    name: '新题单',
+    description: '题目管理批量创建',
+    createdAt: '2026-05-24T00:00:00',
+    problems: [sampleProblems[0]]
+  })
+
+  render(ProblemsView)
+
+  await userEvent.click(await screen.findByRole('button', { name: '选择' }))
+  await userEvent.click(await screen.findByRole('checkbox', { name: new RegExp(sampleProblems[0].title) }))
+  await userEvent.click(screen.getByRole('button', { name: /加入题单/ }))
+  await userEvent.type(await screen.findByPlaceholderText('输入新题单名称'), '新题单')
+  await userEvent.click(screen.getByRole('button', { name: /新建题单并加入/ }))
+
+  await waitFor(() => {
+    expect(api.createProblemSetWithProblems).toHaveBeenCalledWith('新题单', '题目管理批量创建', [1])
   })
 })

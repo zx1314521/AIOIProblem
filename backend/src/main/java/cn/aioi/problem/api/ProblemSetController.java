@@ -35,11 +35,24 @@ public class ProblemSetController {
         return problemSetService.create(request, principal.user());
     }
 
+    @PostMapping("/with-problems")
+    ProblemSetDtos.ProblemSetResponse createWithProblems(@Valid @RequestBody ProblemSetDtos.ProblemSetWithProblemsRequest request,
+                                                         @AuthenticationPrincipal UserPrincipal principal) {
+        return problemSetService.createWithProblems(request, principal.user());
+    }
+
     @PostMapping("/{id}/items")
     ProblemSetDtos.ProblemSetResponse addProblem(@PathVariable Long id,
                                                  @Valid @RequestBody ProblemSetDtos.AddProblemRequest request,
                                                  @AuthenticationPrincipal UserPrincipal principal) {
         return problemSetService.addProblem(id, request.problemId(), principal.user());
+    }
+
+    @PostMapping("/{id}/items/bulk")
+    ProblemSetDtos.ProblemSetResponse addProblems(@PathVariable Long id,
+                                                  @Valid @RequestBody ProblemSetDtos.AddProblemsRequest request,
+                                                  @AuthenticationPrincipal UserPrincipal principal) {
+        return problemSetService.addProblems(id, request.problemIds(), principal.user());
     }
 
     @DeleteMapping("/{id}/items/{problemId}")
@@ -49,4 +62,3 @@ public class ProblemSetController {
         return problemSetService.removeProblem(id, problemId, principal.user());
     }
 }
-
