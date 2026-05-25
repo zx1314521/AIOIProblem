@@ -109,7 +109,7 @@ test('manages problems with sorting and create dialog', async () => {
   })
 
   vi.mocked(api.getProblem).mockResolvedValue(sampleProblems[0])
-  await userEvent.click(screen.getAllByText('查看')[0])
+  await userEvent.click(screen.getByText('A 旧题'))
   expect(await screen.findByRole('dialog')).toBeTruthy()
   expect(await screen.findByText('旧题面')).toBeTruthy()
 

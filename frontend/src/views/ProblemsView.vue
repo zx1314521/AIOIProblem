@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from 'markdown-it-katex'
 import 'katex/dist/katex.min.css'
-import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Eye, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
+import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet, TagCategory } from '../types'
 import { normalizeProblemMath } from '../utils/problemMath'
@@ -571,16 +571,13 @@ onMounted(async () => {
           <span class="difficulty">{{ problem.difficulty }}</span>
         </div>
         <div class="row-actions" @click.stop>
-          <button class="ghost icon-action" type="button" title="查看题面" @click="viewProblem(problem)">
-            <Eye :size="15" />查看
-          </button>
-          <button class="ghost icon-action" type="button" title="编辑题目" @click="openEdit(problem)">
+          <button class="ghost icon-action edit-action" type="button" title="编辑题目" @click="openEdit(problem)">
             <Pencil :size="15" />编辑
           </button>
-          <button class="ghost icon-action pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
+          <button class="ghost icon-action pass-action pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
             <CheckCircle2 :size="15" />{{ problem.passed ? '已通过' : '通过' }}
           </button>
-          <button class="ghost icon-action danger" type="button" title="删除题目" @click="deleteProblem(problem)">
+          <button class="ghost icon-action delete-action danger" type="button" title="删除题目" @click="deleteProblem(problem)">
             <Trash2 :size="15" />删除
           </button>
         </div>
@@ -1279,13 +1276,13 @@ h2 {
 .problem-table-head,
 .problem-row-compact {
   display: grid;
-  grid-template-columns: 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 220px;
+  grid-template-columns: 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 188px;
   align-items: center;
 }
 
 .problem-table-head.selecting,
 .problem-row-compact.selecting-row {
-  grid-template-columns: 36px 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 220px;
+  grid-template-columns: 36px 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 188px;
 }
 
 .problem-table-head {
@@ -1296,6 +1293,11 @@ h2 {
   background: #ffffff;
   font-size: 13px;
   font-weight: 700;
+}
+
+.problem-table-head span:last-child {
+  text-align: right;
+  padding-right: 4px;
 }
 
 .problem-row-compact {
@@ -1413,11 +1415,14 @@ h2 {
 .row-actions {
   justify-content: flex-end;
   gap: 5px;
+  justify-self: end;
+  width: 100%;
 }
 
 .icon-action {
-  background: transparent;
-  border: 1px solid transparent;
+  min-width: 54px;
+  background: #ffffff;
+  border: 1px solid #d8e0e8;
   color: #4b5563;
 }
 
@@ -1426,10 +1431,44 @@ h2 {
   border-color: #dbe2ea;
 }
 
-.pass-toggle.passed {
-  background: #f1f8f3;
+.edit-action {
+  border-color: #b8d8f3;
+  background: #f0f7ff;
+  color: #2475b9;
+}
+
+.edit-action:hover {
+  border-color: #85bde8;
+  background: #e3f1ff;
+}
+
+.pass-action {
+  border-color: #c7e4d1;
+  background: #effaf2;
   color: #2f9e44;
-  border-color: #d6ecdc;
+}
+
+.pass-action:hover {
+  border-color: #92cf9f;
+  background: #e4f6e8;
+}
+
+.delete-action {
+  border-color: #f1c1bc;
+  background: #fff2f0;
+  color: #c43c33;
+}
+
+.delete-action:hover {
+  border-color: #eba29a;
+  background: #ffe8e5;
+}
+
+.pass-toggle.passed {
+  background: #2f9e44;
+  color: #2f9e44;
+  border-color: #2f9e44;
+  color: #ffffff;
 }
 
 .modal-panel {
