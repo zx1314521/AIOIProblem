@@ -70,6 +70,8 @@ export interface RecommendationItem {
 
 export interface AiSettings {
   provider: 'codex' | 'deepseek' | 'mock'
+  problemAnalysisProvider: 'codex' | 'deepseek' | 'mock'
+  recommendationProvider: 'codex' | 'deepseek' | 'mock'
   deepSeekApiKey: string
   deepSeekBaseUrl: string
   deepSeekModel: string

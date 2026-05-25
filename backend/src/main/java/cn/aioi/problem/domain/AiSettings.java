@@ -14,6 +14,12 @@ public class AiSettings {
     @Column(nullable = false, length = 24)
     private String provider;
 
+    @Column(length = 24)
+    private String problemAnalysisProvider;
+
+    @Column(length = 24)
+    private String recommendationProvider;
+
     private String deepSeekApiKey;
     private String deepSeekBaseUrl;
     private String deepSeekModel;
@@ -29,6 +35,8 @@ public class AiSettings {
                       Integer deepSeekTimeoutSeconds, String codexCommand, Integer codexTimeoutSeconds) {
         this.id = id;
         this.provider = provider;
+        this.problemAnalysisProvider = provider;
+        this.recommendationProvider = provider;
         this.deepSeekApiKey = deepSeekApiKey;
         this.deepSeekBaseUrl = deepSeekBaseUrl;
         this.deepSeekModel = deepSeekModel;
@@ -37,9 +45,12 @@ public class AiSettings {
         this.codexTimeoutSeconds = codexTimeoutSeconds;
     }
 
-    public void update(String provider, String deepSeekApiKey, String deepSeekBaseUrl, String deepSeekModel,
+    public void update(String provider, String problemAnalysisProvider, String recommendationProvider,
+                       String deepSeekApiKey, String deepSeekBaseUrl, String deepSeekModel,
                        Integer deepSeekTimeoutSeconds, String codexCommand, Integer codexTimeoutSeconds) {
         this.provider = provider;
+        this.problemAnalysisProvider = problemAnalysisProvider;
+        this.recommendationProvider = recommendationProvider;
         this.deepSeekApiKey = deepSeekApiKey;
         this.deepSeekBaseUrl = deepSeekBaseUrl;
         this.deepSeekModel = deepSeekModel;
@@ -54,6 +65,14 @@ public class AiSettings {
 
     public String getProvider() {
         return provider;
+    }
+
+    public String getProblemAnalysisProvider() {
+        return problemAnalysisProvider;
+    }
+
+    public String getRecommendationProvider() {
+        return recommendationProvider;
     }
 
     public String getDeepSeekApiKey() {
@@ -80,4 +99,3 @@ public class AiSettings {
         return codexTimeoutSeconds;
     }
 }
-

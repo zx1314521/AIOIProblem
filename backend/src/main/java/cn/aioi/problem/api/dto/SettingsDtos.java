@@ -10,6 +10,8 @@ public final class SettingsDtos {
 
     public record AiSettingsRequest(
             @NotBlank String provider,
+            String problemAnalysisProvider,
+            String recommendationProvider,
             String deepSeekApiKey,
             String deepSeekBaseUrl,
             String deepSeekModel,
@@ -21,6 +23,8 @@ public final class SettingsDtos {
 
     public record AiSettingsResponse(
             String provider,
+            String problemAnalysisProvider,
+            String recommendationProvider,
             String deepSeekApiKey,
             String deepSeekBaseUrl,
             String deepSeekModel,
@@ -30,4 +34,3 @@ public final class SettingsDtos {
     ) {
     }
 }
-

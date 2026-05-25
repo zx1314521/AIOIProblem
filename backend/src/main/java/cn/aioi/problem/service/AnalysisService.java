@@ -2,6 +2,7 @@ package cn.aioi.problem.service;
 
 import cn.aioi.problem.ai.AiAssessment;
 import cn.aioi.problem.ai.AiProvider;
+import cn.aioi.problem.ai.AiTaskType;
 import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.api.dto.AnalysisDtos;
 import cn.aioi.problem.domain.Problem;
@@ -31,7 +32,7 @@ public class AnalysisService {
             throw new IllegalArgumentException("题面不能为空");
         }
         String safeTitle = title == null || title.isBlank() ? "未命名题目" : title.trim();
-        AiAssessment assessment = aiProvider.assess(new ProblemInput(safeTitle, text.trim()));
+        AiAssessment assessment = aiProvider.assess(new ProblemInput(safeTitle, text.trim()), AiTaskType.PROBLEM_ANALYSIS);
         return toResponse(assessment);
     }
 
@@ -98,4 +99,3 @@ public class AnalysisService {
     private record ScoredProblem(Problem problem, int score) {
     }
 }
-

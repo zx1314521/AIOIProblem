@@ -22,7 +22,12 @@ public class AiProviderRouter implements AiProvider {
 
     @Override
     public AiAssessment assess(ProblemInput input) {
-        AiRuntimeSettings settings = settingsService.runtimeSettings();
+        return assess(input, AiTaskType.PROBLEM_ANALYSIS);
+    }
+
+    @Override
+    public AiAssessment assess(ProblemInput input, AiTaskType taskType) {
+        AiRuntimeSettings settings = settingsService.runtimeSettings(taskType);
         try {
             return switch (settings.provider()) {
                 case "deepseek" -> deepSeek.assess(input, settings);

@@ -2,6 +2,10 @@ package cn.aioi.problem.service;
 
 import cn.aioi.problem.api.dto.ProblemDtos;
 import cn.aioi.problem.api.dto.RecommendationDtos;
+import cn.aioi.problem.ai.AiAssessment;
+import cn.aioi.problem.ai.AiProvider;
+import cn.aioi.problem.ai.AiTaskType;
+import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.domain.PassedProblem;
 import cn.aioi.problem.domain.Problem;
 import cn.aioi.problem.domain.User;
@@ -22,10 +26,12 @@ import java.util.stream.Collectors;
 public class RecommendationService {
     private final ProblemRepository problems;
     private final PassedProblemRepository passedProblems;
+    private final AiProvider aiProvider;
 
-    public RecommendationService(ProblemRepository problems, PassedProblemRepository passedProblems) {
+    public RecommendationService(ProblemRepository problems, PassedProblemRepository passedProblems, AiProvider aiProvider) {
         this.problems = problems;
         this.passedProblems = passedProblems;
+        this.aiProvider = aiProvider;
     }
 
     @Transactional(readOnly = true)
@@ -37,12 +43,13 @@ public class RecommendationService {
                 .filter(problem -> !passedIds.contains(problem.getId()))
                 .toList();
 
-        List<String> weakTags = weakTags(candidates, solvedTagCounts);
+        RecommendationPlan aiPlan = aiPlan(passed, candidates);
+        List<String> weakTags = mergeWeakTags(aiPlan.tags(), weakTags(candidates, solvedTagCounts), candidates);
         Set<String> weakSet = new HashSet<>(weakTags);
-        int targetRank = targetRank(passed);
+        int targetRank = aiPlan.targetRank() == null ? targetRank(passed) : aiPlan.targetRank();
 
         List<RecommendationDtos.RecommendationItem> items = candidates.stream()
-                .map(problem -> new ScoredRecommendation(problem, score(problem, weakSet, targetRank)))
+                .map(problem -> new ScoredRecommendation(problem, score(problem, weakTags, targetRank)))
                 .sorted(Comparator.comparingInt(ScoredRecommendation::score).reversed()
                         .thenComparing(scored -> scored.problem.getDifficulty().rank()))
                 .limit(8)
@@ -88,8 +95,63 @@ public class RecommendationService {
         return Math.min(6, (int) Math.ceil(average) + 1);
     }
 
-    private int score(Problem problem, Set<String> weakTags, int targetRank) {
-        int weakScore = (int) problem.getTags().stream().filter(weakTags::contains).count() * 10;
+    private RecommendationPlan aiPlan(List<PassedProblem> passed, List<Problem> candidates) {
+        if (candidates.isEmpty()) {
+            return new RecommendationPlan(List.of(), null);
+        }
+        try {
+            AiAssessment assessment = aiProvider.assess(new ProblemInput("AI推荐", recommendationPrompt(passed, candidates)), AiTaskType.RECOMMENDATION);
+            return new RecommendationPlan(assessment.tags(), assessment.difficulty().rank());
+        } catch (RuntimeException ignored) {
+            return new RecommendationPlan(List.of(), null);
+        }
+    }
+
+    private String recommendationPrompt(List<PassedProblem> passed, List<Problem> candidates) {
+        String solved = passed.stream()
+                .map(item -> problemBrief(item.getProblem()))
+                .limit(40)
+                .collect(Collectors.joining("\n"));
+        String available = candidates.stream()
+                .map(this::problemBrief)
+                .limit(80)
+                .collect(Collectors.joining("\n"));
+        return """
+                根据学生已通过题目和候选题库，判断下一阶段应补强的算法标签和目标难度。
+                只需要输出符合系统 JSON schema 的 difficulty、tags、hints、reasoningSummary。
+                已通过：
+                """ + (solved.isBlank() ? "暂无" : solved) + "\n候选题：\n" + available;
+    }
+
+    private String problemBrief(Problem problem) {
+        return problem.getTitle() + " / " + problem.getDifficulty().label() + " / " + String.join("、", problem.getTags());
+    }
+
+    private List<String> mergeWeakTags(List<String> aiTags, List<String> ruleTags, List<Problem> candidates) {
+        Set<String> available = candidates.stream()
+                .flatMap(problem -> problem.getTags().stream())
+                .collect(Collectors.toSet());
+        List<String> merged = new java.util.ArrayList<>();
+        aiTags.stream()
+                .filter(available::contains)
+                .forEach(tag -> addUnique(merged, tag));
+        ruleTags.forEach(tag -> addUnique(merged, tag));
+        return merged.stream().limit(5).toList();
+    }
+
+    private void addUnique(List<String> values, String value) {
+        if (!values.contains(value)) {
+            values.add(value);
+        }
+    }
+
+    private int score(Problem problem, List<String> weakTags, int targetRank) {
+        int weakScore = 0;
+        for (int index = 0; index < weakTags.size(); index++) {
+            if (problem.getTags().contains(weakTags.get(index))) {
+                weakScore += (weakTags.size() - index) * 10;
+            }
+        }
         int difficultyFit = Math.max(0, 8 - Math.abs(problem.getDifficulty().rank() - targetRank) * 2);
         return weakScore + difficultyFit;
     }
@@ -102,5 +164,8 @@ public class RecommendationService {
     }
 
     private record ScoredRecommendation(Problem problem, int score) {
+    }
+
+    private record RecommendationPlan(List<String> tags, Integer targetRank) {
     }
 }

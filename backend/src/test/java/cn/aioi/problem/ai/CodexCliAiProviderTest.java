@@ -3,11 +3,17 @@ package cn.aioi.problem.ai;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
+import cn.aioi.problem.domain.DifficultyLevel;
+import cn.aioi.problem.service.TagCatalogService;
+import com.fasterxml.jackson.databind.ObjectMapper;
+
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 class CodexCliAiProviderTest {
     @Test
@@ -56,5 +62,29 @@ class CodexCliAiProviderTest {
                 output.toString(),
                 "-"
         );
+    }
+
+    @Test
+    void redirectsVerboseCodexOutputSoProcessCannotBlockOnStdout(@TempDir Path tempDir) throws Exception {
+        Path fakeCodex = tempDir.resolve("fake-codex.cmd");
+        Files.writeString(fakeCodex, """
+                @echo off
+                for /l %%i in (1,1,9000) do echo verbose codex event %%i
+                > "%7" echo {"difficulty":"EASY","confidence":0.81,"tags":[],"hints":["read"],"reasoningSummary":"ok"}
+                exit /b 0
+                """);
+        TagCatalogService tagCatalog = mock(TagCatalogService.class);
+        when(tagCatalog.promptText()).thenReturn("");
+        when(tagCatalog.normalizeAiTags(List.of())).thenReturn(List.of());
+        CodexCliAiProvider provider = new CodexCliAiProvider(
+                new AiProperties("codex", null, new AiProperties.Codex(fakeCodex.toString(), 5)),
+                new AiAssessmentParser(new ObjectMapper(), tagCatalog),
+                tagCatalog
+        );
+
+        AiAssessment assessment = provider.assess(new ProblemInput("测试", "输出 a_i"));
+
+        assertThat(assessment.difficulty()).isEqualTo(DifficultyLevel.EASY);
+        assertThat(assessment.confidence()).isEqualTo(0.81);
     }
 }

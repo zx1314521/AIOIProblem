@@ -3,6 +3,7 @@ package cn.aioi.problem.service;
 import cn.aioi.problem.ai.AiAssessment;
 import cn.aioi.problem.ai.AiProvider;
 import cn.aioi.problem.ai.AiRuntimeSettings;
+import cn.aioi.problem.ai.AiTaskType;
 import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.api.dto.BatchDtos;
 import cn.aioi.problem.domain.BatchItemStatus;
@@ -220,10 +221,10 @@ public class BatchJobService {
         if (workItem == null) {
             return;
         }
-        AiRuntimeSettings runtime = aiSettingsService.runtimeSettings();
+        AiRuntimeSettings runtime = aiSettingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS);
         long started = System.nanoTime();
         try {
-            AiAssessment assessment = aiProvider.assess(new ProblemInput(workItem.title(), workItem.content()));
+            AiAssessment assessment = aiProvider.assess(new ProblemInput(workItem.title(), workItem.content()), AiTaskType.PROBLEM_ANALYSIS);
             long durationMs = elapsedMs(started);
             transactionTemplate.executeWithoutResult(status -> {
                 BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();

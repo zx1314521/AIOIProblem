@@ -2,6 +2,7 @@ package cn.aioi.problem.service;
 
 import cn.aioi.problem.ai.AiProperties;
 import cn.aioi.problem.ai.AiRuntimeSettings;
+import cn.aioi.problem.ai.AiTaskType;
 import cn.aioi.problem.api.dto.SettingsDtos;
 import cn.aioi.problem.domain.AiSettings;
 import cn.aioi.problem.repository.AiSettingsRepository;
@@ -28,8 +29,11 @@ public class AiSettingsService {
     @Transactional
     public SettingsDtos.AiSettingsResponse update(SettingsDtos.AiSettingsRequest request) {
         AiSettings settings = loadSettings();
+        String defaultProvider = normalizeProvider(request.provider());
         settings.update(
-                normalizeProvider(request.provider()),
+                defaultProvider,
+                normalizeProvider(defaultString(request.problemAnalysisProvider(), defaultProvider)),
+                normalizeProvider(defaultString(request.recommendationProvider(), defaultProvider)),
                 clean(request.deepSeekApiKey()),
                 defaultString(request.deepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
                 defaultString(request.deepSeekModel(), defaultDeepSeekModel()),
@@ -42,9 +46,15 @@ public class AiSettingsService {
 
     @Transactional(readOnly = true)
     public AiRuntimeSettings runtimeSettings() {
+        return runtimeSettings(AiTaskType.PROBLEM_ANALYSIS);
+    }
+
+    @Transactional(readOnly = true)
+    public AiRuntimeSettings runtimeSettings(AiTaskType taskType) {
         AiSettings settings = loadSettings();
+        String provider = providerForTask(settings, taskType);
         return new AiRuntimeSettings(
-                normalizeProvider(settings.getProvider()),
+                provider,
                 clean(settings.getDeepSeekApiKey()),
                 defaultString(settings.getDeepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
                 defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
@@ -68,8 +78,9 @@ public class AiSettingsService {
     }
 
     private SettingsDtos.AiSettingsResponse toResponse(AiSettings settings) {
+        String defaultProvider = normalizeProvider(settings.getProvider());
         AiRuntimeSettings runtime = new AiRuntimeSettings(
-                normalizeProvider(settings.getProvider()),
+                defaultProvider,
                 clean(settings.getDeepSeekApiKey()),
                 defaultString(settings.getDeepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
                 defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
@@ -79,6 +90,8 @@ public class AiSettingsService {
         );
         return new SettingsDtos.AiSettingsResponse(
                 runtime.provider(),
+                normalizeProvider(defaultString(settings.getProblemAnalysisProvider(), defaultProvider)),
+                normalizeProvider(defaultString(settings.getRecommendationProvider(), defaultProvider)),
                 runtime.deepSeekApiKey(),
                 runtime.deepSeekBaseUrl(),
                 runtime.deepSeekModel(),
@@ -86,6 +99,15 @@ public class AiSettingsService {
                 runtime.codexCommand(),
                 runtime.codexTimeoutSeconds()
         );
+    }
+
+    private String providerForTask(AiSettings settings, AiTaskType taskType) {
+        String defaultProvider = normalizeProvider(settings.getProvider());
+        String configured = switch (taskType) {
+            case PROBLEM_ANALYSIS -> settings.getProblemAnalysisProvider();
+            case RECOMMENDATION -> settings.getRecommendationProvider();
+        };
+        return normalizeProvider(defaultString(configured, defaultProvider));
     }
 
     private String normalizeProvider(String provider) {
