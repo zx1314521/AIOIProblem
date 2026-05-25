@@ -18,7 +18,7 @@ vi.mock('../services/api', () => ({
 const firstProblem: Problem = {
   id: 1,
   title: '基础模拟',
-  description: '题面',
+  description: '给定数组 $a_i$，输出最大值。\n\n#### 输入格式\n一行整数。',
   difficulty: '简单',
   difficultyCode: 'EASY',
   tags: ['模拟'],
@@ -85,4 +85,14 @@ test('reorders current problem set items with move buttons', async () => {
   })
   const titles = Array.from(document.querySelectorAll('.set-problem-title')).map(node => node.textContent)
   expect(titles).toEqual(['贪心训练', '基础模拟'])
+})
+
+test('opens a problem statement from the selected problem set', async () => {
+  render(ProblemSetsView)
+
+  await userEvent.click(await screen.findByRole('button', { name: '基础模拟' }))
+
+  expect(await screen.findByRole('dialog', { name: /基础模拟/ })).toBeTruthy()
+  expect(screen.getByText(/输出最大值/)).toBeTruthy()
+  expect(document.querySelector('.problem-statement .katex')).toBeTruthy()
 })

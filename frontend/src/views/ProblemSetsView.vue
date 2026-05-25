@@ -1,10 +1,15 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import MarkdownIt from 'markdown-it'
+import markdownItKatex from 'markdown-it-katex'
+import 'katex/dist/katex.min.css'
 import { ArrowDown, ArrowUp, CheckCircle2, FolderPlus, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet } from '../types'
+import { normalizeProblemMath } from '../utils/problemMath'
 
 const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困难', '地狱NOI']
+const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 
 const sets = ref<ProblemSet[]>([])
 const selectedSetId = ref<number | null>(null)
@@ -19,9 +24,11 @@ const selectedProblemIds = ref<number[]>([])
 const searching = ref(false)
 const adding = ref(false)
 const draggedProblemId = ref<number | null>(null)
+const selectedProblem = ref<Problem | null>(null)
 
 const selectedSet = computed(() => sets.value.find(set => set.id === selectedSetId.value) ?? sets.value[0])
 const selectedSetProblemIds = computed(() => new Set(selectedSet.value?.problems.map(problem => problem.id) ?? []))
+const selectedProblemHtml = computed(() => markdown.render(normalizeProblemMath(selectedProblem.value?.description || '')))
 
 const selectedSetStats = computed(() => {
   const problems = selectedSet.value?.problems ?? []
@@ -68,6 +75,7 @@ async function createSet() {
 
 function selectSet(set: ProblemSet) {
   selectedSetId.value = set.id
+  selectedProblem.value = null
   error.value = ''
 }
 
@@ -88,6 +96,14 @@ function openSearch() {
 function closeSearch() {
   searchOpen.value = false
   selectedProblemIds.value = []
+}
+
+function openProblem(problem: Problem) {
+  selectedProblem.value = problem
+}
+
+function closeProblem() {
+  selectedProblem.value = null
 }
 
 async function searchProblems() {
@@ -256,7 +272,11 @@ onMounted(load)
                   </span>
                 </td>
                 <td>P{{ problem.id }}</td>
-                <td class="set-problem-title">{{ problem.title }}</td>
+                <td>
+                  <button class="set-problem-title title-link" type="button" @click="openProblem(problem)">
+                    {{ problem.title }}
+                  </button>
+                </td>
                 <td>
                   <div class="table-tags">
                     <span v-for="tag in problem.tags.slice(0, 3)" :key="tag" class="mini-tag">{{ tag }}</span>
@@ -334,6 +354,30 @@ onMounted(load)
           加入当前题单
         </button>
       </footer>
+    </section>
+  </div>
+
+  <div v-if="selectedProblem" class="modal-backdrop" @click.self="closeProblem">
+    <section class="problem-detail-modal panel" role="dialog" aria-modal="true" :aria-label="selectedProblem.title">
+      <header class="modal-header problem-modal-header">
+        <div>
+          <h2>P{{ selectedProblem.id }} {{ selectedProblem.title }}</h2>
+          <div class="problem-meta-line">
+            <span class="difficulty">{{ selectedProblem.difficulty }}</span>
+            <span v-if="selectedProblem.passed" class="pass-state passed"><CheckCircle2 :size="14" />已通过</span>
+            <span v-else class="pass-state"><CheckCircle2 :size="14" />未通过</span>
+          </div>
+        </div>
+        <button class="icon-btn" type="button" aria-label="关闭题面" @click="closeProblem"><X :size="18" /></button>
+      </header>
+
+      <div class="problem-detail-body">
+        <div class="tag-row problem-detail-tags">
+          <span v-for="tag in selectedProblem.tags" :key="tag" class="tag">{{ tag }}</span>
+          <span v-if="selectedProblem.tags.length === 0" class="tag">没有标签</span>
+        </div>
+        <article class="markdown-preview problem-statement" v-html="selectedProblemHtml"></article>
+      </div>
     </section>
   </div>
 </template>
@@ -500,6 +544,19 @@ onMounted(load)
   font-weight: 800;
 }
 
+.title-link {
+  border: 0;
+  padding: 0;
+  background: transparent;
+  text-align: left;
+  line-height: 1.45;
+}
+
+.title-link:hover {
+  color: #0b75bd;
+  text-decoration: underline;
+}
+
 .pass-state,
 .text-danger,
 .icon-btn {
@@ -600,6 +657,15 @@ onMounted(load)
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
+.problem-detail-modal {
+  width: min(1040px, 100%);
+  max-height: min(820px, calc(100vh - 44px));
+  padding: 0;
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
 .modal-header,
 .modal-footer {
   display: flex;
@@ -613,6 +679,37 @@ onMounted(load)
 .modal-footer {
   border-top: 1px solid var(--line);
   border-bottom: 0;
+}
+
+.problem-modal-header {
+  align-items: flex-start;
+}
+
+.problem-meta-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 10px;
+}
+
+.problem-detail-body {
+  overflow: auto;
+  padding: 18px 22px 26px;
+}
+
+.problem-detail-tags {
+  margin-bottom: 14px;
+}
+
+.problem-statement {
+  max-width: 900px;
+}
+
+.problem-statement :deep(h1),
+.problem-statement :deep(h2),
+.problem-statement :deep(h3) {
+  margin-top: 18px;
+  margin-bottom: 10px;
 }
 
 .search-toolbar {
