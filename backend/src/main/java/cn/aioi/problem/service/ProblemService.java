@@ -120,7 +120,6 @@ public class ProblemService {
         Set<String> clean = new LinkedHashSet<>();
         List<String> invalid = new java.util.ArrayList<>();
         tags.stream()
-                .limit(12)
                 .forEach(tag -> {
                     if (tag == null || tag.trim().isBlank()) {
                         invalid.add("空标签");
@@ -136,7 +135,7 @@ public class ProblemService {
         if (!invalid.isEmpty()) {
             throw new IllegalArgumentException("未知标签：" + String.join("、", invalid));
         }
-        return clean;
+        return clean.stream().limit(12).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     private String normalizeSearchTag(String tag) {

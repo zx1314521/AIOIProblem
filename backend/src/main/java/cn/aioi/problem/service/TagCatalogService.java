@@ -112,7 +112,14 @@ public class TagCatalogService {
         standardTags.forEach(tag -> map.put(aliasKey(tag), tag));
         alias(map, "广度优先搜索 BFS", "BFS", "广搜", "宽搜");
         alias(map, "深度优先搜索 DFS", "DFS", "深搜");
+        alias(map, "启发式迭代加深搜索 IDA*", "IDA", "IDA Star", "IDA*");
+        alias(map, "A* 算法", "A Star", "A*");
+        alias(map, "折半搜索 meet in the middle", "meet in middle", "MITM", "折半枚举");
         alias(map, "背包 DP", "背包", "背包问题");
+        alias(map, "数位 DP", "数位动态规划");
+        alias(map, "区间 DP", "区间动态规划");
+        alias(map, "树形 DP", "树形动态规划");
+        alias(map, "状压 DP", "状压", "状态压缩 DP");
         alias(map, "字典树 Trie", "Trie", "前缀树", "字典树");
         alias(map, "KMP 算法", "KMP");
         alias(map, "后缀自动机 SAM", "SAM");
@@ -122,6 +129,7 @@ public class TagCatalogService {
         alias(map, "Z 函数", "Z算法", "Z Algorithm");
         alias(map, "强连通分量", "SCC", "强连通", "强联通分量");
         alias(map, "双连通分量", "BCC", "双连通", "双联通分量");
+        alias(map, "2-SAT", "2sat");
         alias(map, "最短路", "最短路径");
         alias(map, "生成树", "MST", "最小生成树");
         alias(map, "网络流", "最大流", "Dinic", "ISAP");

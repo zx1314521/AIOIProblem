@@ -24,4 +24,16 @@ class ProblemServiceTagValidationTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("未知标签：图论、未知标签、空标签");
     }
+
+    @Test
+    void validatesUnknownTagsBeyondSavedLimit() {
+        LinkedHashSet<String> tags = new LinkedHashSet<>(List.of(
+                "顺序结构", "分支结构", "循环结构", "数组", "结构体", "函数与递归",
+                "KMP 算法", "最短路", "线段树", "并查集", "前缀和", "模拟", "未知标签"
+        ));
+
+        assertThatThrownBy(() -> ProblemService.sanitizeTags(tags, catalog))
+                .isInstanceOf(IllegalArgumentException.class)
+                .hasMessageContaining("未知标签：未知标签");
+    }
 }
