@@ -28,7 +28,8 @@ const historyEntries = computed(() => {
     .sort((a, b) => Date.parse(logTime(b.item)) - Date.parse(logTime(a.item)))
 })
 
-const successCount = computed(() => historyEntries.value.filter(entry => entry.item.status === 'SUCCEEDED').length)
+const successCount = computed(() => historyEntries.value.filter(entry => entry.item.status === 'SUCCEEDED' && !isFallbackItem(entry.item)).length)
+const fallbackCount = computed(() => historyEntries.value.filter(entry => isFallbackItem(entry.item)).length)
 const failedCount = computed(() => historyEntries.value.filter(entry => entry.item.status === 'FAILED').length)
 const previewHtml = computed(() => markdown.render(normalizeProblemMath(selected.value?.item.content || '')))
 
@@ -52,6 +53,23 @@ function selectEntry(entry: HistoryEntry) {
   selected.value = entry
 }
 
+function isFallbackItem(item: BatchItem) {
+  return item.status === 'SUCCEEDED' && Boolean(item.aiReasoningSummary?.includes('已使用本地规则模型兜底'))
+}
+
+function failedProviderFromSummary(item: BatchItem) {
+  const summary = item.aiReasoningSummary || ''
+  const match = summary.match(/^(.+?) 调用失败/)
+  return match?.[1] || item.aiProvider || '原 AI'
+}
+
+function displayStatusText(item: BatchItem) {
+  if (isFallbackItem(item)) {
+    return '规则兜底'
+  }
+  return statusText(item.status)
+}
+
 function statusText(status: string) {
   return {
     FAILED: '失败',
@@ -59,8 +77,39 @@ function statusText(status: string) {
   }[status] ?? status
 }
 
-function statusClass(status: string) {
-  return status === 'FAILED' ? 'danger' : 'success'
+function statusClass(item: BatchItem) {
+  if (item.status === 'FAILED') {
+    return 'danger'
+  }
+  return isFallbackItem(item) ? 'fallback' : 'success'
+}
+
+function displayAiProvider(item: BatchItem) {
+  if (isFallbackItem(item)) {
+    return `本地规则模型（${failedProviderFromSummary(item)}失败后兜底）`
+  }
+  return item.aiProvider || '未记录'
+}
+
+function displayAiModel(item: BatchItem) {
+  if (isFallbackItem(item)) {
+    return '规则模型'
+  }
+  return item.aiModel || '未记录'
+}
+
+function displayReasoning(item: BatchItem) {
+  if (!item.aiReasoningSummary) {
+    return item.status === 'FAILED' ? '分析失败，未生成过程摘要。' : '旧记录未保存过程摘要。'
+  }
+  if (!isFallbackItem(item)) {
+    return item.aiReasoningSummary
+  }
+  const provider = failedProviderFromSummary(item)
+  return item.aiReasoningSummary.replace(
+    /^.+? 调用失败，已使用本地规则模型兜底：/,
+    `${provider} 调用失败；本次难度和提示由本地规则模型兜底生成：`
+  )
 }
 
 function logTime(item: BatchItem) {
@@ -116,7 +165,7 @@ onMounted(loadHistory)
       <div class="history-title">
         <div>
           <h2>分析日志</h2>
-          <p>{{ historyEntries.length }} 条记录 · {{ successCount }} 成功 · {{ failedCount }} 失败</p>
+          <p>{{ historyEntries.length }} 条记录 · {{ successCount }} 成功 · {{ fallbackCount }} 规则兜底 · {{ failedCount }} 失败</p>
         </div>
         <span class="count-badge">{{ historyEntries.length }}</span>
       </div>
@@ -132,13 +181,13 @@ onMounted(loadHistory)
         >
           <span class="timeline-dot" />
           <span class="item-topline">
-            <span class="status-pill" :class="statusClass(entry.item.status)">{{ statusText(entry.item.status) }}</span>
+            <span class="status-pill" :class="statusClass(entry.item)">{{ displayStatusText(entry.item) }}</span>
             <time>{{ formatDate(logTime(entry.item)) }}</time>
           </span>
           <strong>{{ entry.item.title }}</strong>
           <span class="item-meta">
-            {{ entry.item.aiProvider || 'AI 未记录' }}
-            <template v-if="entry.item.aiModel"> · {{ entry.item.aiModel }}</template>
+            {{ displayAiProvider(entry.item) }}
+            <template v-if="displayAiModel(entry.item) !== '未记录'"> · {{ displayAiModel(entry.item) }}</template>
             · {{ formatDuration(entry.item.aiDurationMs) }}
           </span>
           <span class="item-meta">
@@ -155,7 +204,7 @@ onMounted(loadHistory)
       <template v-if="selected">
         <div class="detail-head">
           <div>
-            <span class="status-pill" :class="statusClass(selected.item.status)">{{ statusText(selected.item.status) }}</span>
+            <span class="status-pill" :class="statusClass(selected.item)">{{ displayStatusText(selected.item) }}</span>
             <h2>{{ selected.item.title }}</h2>
             <p>{{ selected.job.name }} · 保存记录 #{{ selected.item.id }}</p>
           </div>
@@ -166,12 +215,12 @@ onMounted(loadHistory)
           <div class="metric-card">
             <Cpu :size="18" />
             <span>AI 来源</span>
-            <strong>{{ selected.item.aiProvider || '未记录' }}</strong>
+            <strong>{{ displayAiProvider(selected.item) }}</strong>
           </div>
           <div class="metric-card">
             <Sparkles :size="18" />
             <span>模型/命令</span>
-            <strong>{{ selected.item.aiModel || '未记录' }}</strong>
+            <strong>{{ displayAiModel(selected.item) }}</strong>
           </div>
           <div class="metric-card">
             <Clock3 :size="18" />
@@ -199,7 +248,7 @@ onMounted(loadHistory)
         <div class="log-section">
           <span class="section-label">AI 分析过程</span>
           <p class="reasoning">
-            {{ selected.item.aiReasoningSummary || (selected.item.status === 'FAILED' ? '分析失败，未生成过程摘要。' : '旧记录未保存过程摘要。') }}
+            {{ displayReasoning(selected.item) }}
           </p>
         </div>
 
@@ -369,6 +418,12 @@ onMounted(loadHistory)
   background: #fff0ed;
   color: #a43e31;
   border: 1px solid #e5b7af;
+}
+
+.status-pill.fallback {
+  background: #fff8e4;
+  color: #8a5c12;
+  border: 1px solid #e5c67c;
 }
 
 .history-detail {

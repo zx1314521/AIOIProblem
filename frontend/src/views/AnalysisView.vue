@@ -261,6 +261,14 @@ function statusText(status: string) {
   }[status] ?? status
 }
 
+function isFallbackItem(item: BatchItem) {
+  return item.status === 'SUCCEEDED' && Boolean(item.aiReasoningSummary?.includes('已使用本地规则模型兜底'))
+}
+
+function displayStatusText(item: BatchItem) {
+  return isFallbackItem(item) ? '规则兜底' : statusText(item.status)
+}
+
 function titleFromFilename(name: string) {
   return name.replace(/\.(txt|md)$/i, '') || '未命名题目'
 }
@@ -355,7 +363,7 @@ onUnmounted(() => {
           v-for="(item, index) in filteredQueueItems"
           :key="item.id"
           class="queue-item"
-          :class="{ active: selectedItem?.id === item.id, locked: item.status !== 'PENDING', running: item.status === 'RUNNING', failed: item.status === 'FAILED', succeeded: item.status === 'SUCCEEDED' }"
+          :class="{ active: selectedItem?.id === item.id, locked: item.status !== 'PENDING', running: item.status === 'RUNNING', failed: item.status === 'FAILED', succeeded: item.status === 'SUCCEEDED' && !isFallbackItem(item), fallback: isFallbackItem(item) }"
           type="button"
           :draggable="item.status === 'PENDING'"
           @click="selectItem(item)"
@@ -364,7 +372,7 @@ onUnmounted(() => {
           @drop="onDrop(item)"
         >
           <strong><span>{{ index + 1 }}</span>{{ item.title }}</strong>
-          <small>{{ statusText(item.status) }}</small>
+          <small>{{ displayStatusText(item) }}</small>
           <span v-if="item.status === 'FAILED' && item.errorMessage" class="error-summary">
             {{ isErrorExpanded(item.id) ? item.errorMessage : errorSummary(item.errorMessage) }}
           </span>
@@ -379,7 +387,7 @@ onUnmounted(() => {
       <template v-if="selectedItem">
         <header class="preview-header">
           <div>
-            <span class="status">{{ statusText(selectedItem.status) }}</span>
+            <span class="status">{{ displayStatusText(selectedItem) }}</span>
             <h2>{{ selectedItem.title }}</h2>
           </div>
           <div v-if="selectedItem.status === 'PENDING'" class="actions">
@@ -536,6 +544,11 @@ onUnmounted(() => {
 .queue-item.succeeded {
   border-color: #c9dfcf;
   background: #f4fbf5;
+}
+
+.queue-item.fallback {
+  border-color: #e5c67c;
+  background: #fff9e8;
 }
 
 .queue-item.locked {

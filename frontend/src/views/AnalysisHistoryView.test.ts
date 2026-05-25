@@ -58,6 +58,26 @@ const historyDetail: BatchJobDetail = {
       aiProvider: 'Codex CLI',
       aiModel: 'codex',
       aiDurationMs: 180000
+    },
+    {
+      id: 13,
+      title: 'P3 兜底题',
+      content: '模拟题面',
+      status: 'SUCCEEDED',
+      sortOrder: 2,
+      problemId: 103,
+      difficulty: '入门',
+      difficultyCode: 'ENTRY',
+      tags: [],
+      createdAt: '2026-05-24T10:00:00',
+      startedAt: '2026-05-24T10:00:01',
+      finishedAt: '2026-05-24T10:03:02',
+      aiProvider: 'Codex CLI',
+      aiModel: 'codex',
+      aiConfidence: 0.62,
+      aiReasoningSummary: 'Codex CLI 调用失败，已使用本地规则模型兜底：规则模型根据关键词、数据范围和算法标签给出初判。',
+      aiHints: ['先模拟。'],
+      aiDurationMs: 181000
     }
   ]
 }
@@ -71,7 +91,7 @@ test('renders analysis logs with AI metadata and process details', async () => {
   render(AnalysisHistoryView)
 
   expect(await screen.findByRole('heading', { name: '历史记录' })).toBeTruthy()
-  expect(await screen.findByText(/2 条记录/)).toBeTruthy()
+  expect(await screen.findByText(/3 条记录 · 1 成功 · 1 规则兜底 · 1 失败/)).toBeTruthy()
 
   await userEvent.click(screen.getByRole('button', { name: /P1 最短路/ }))
 
@@ -86,4 +106,10 @@ test('renders analysis logs with AI metadata and process details', async () => {
   await userEvent.click(screen.getByRole('button', { name: /P2 失败题/ }))
   expect(screen.getByText('Codex CLI 调用超时')).toBeTruthy()
   expect(screen.getByText('180 s')).toBeTruthy()
+
+  await userEvent.click(screen.getByRole('button', { name: /P3 兜底题/ }))
+  expect(screen.getAllByText('规则兜底').length).toBeGreaterThan(0)
+  expect(screen.getByText('本地规则模型（Codex CLI失败后兜底）')).toBeTruthy()
+  expect(screen.getByText('规则模型')).toBeTruthy()
+  expect(screen.getByText(/Codex CLI 调用失败；本次难度和提示由本地规则模型兜底生成/)).toBeTruthy()
 })

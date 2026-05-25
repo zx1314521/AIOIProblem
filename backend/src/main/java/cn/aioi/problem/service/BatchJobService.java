@@ -237,8 +237,8 @@ public class BatchJobService {
                         owner
                 ));
                 item.completeAnalysisMetadata(
-                        runtime.providerLabel(),
-                        modelLabel(runtime),
+                        providerLabel(runtime, assessment),
+                        modelLabel(runtime, assessment),
                         assessment.confidence(),
                         assessment.reasoningSummary(),
                         encodeHints(assessment.hints()),
@@ -318,6 +318,20 @@ public class BatchJobService {
         );
     }
 
+    private String providerLabel(AiRuntimeSettings runtime, AiAssessment assessment) {
+        if (usedRuleFallback(assessment)) {
+            return "本地规则模型（" + runtime.providerLabel() + "失败后兜底）";
+        }
+        return runtime.providerLabel();
+    }
+
+    private String modelLabel(AiRuntimeSettings runtime, AiAssessment assessment) {
+        if (usedRuleFallback(assessment)) {
+            return "规则模型";
+        }
+        return modelLabel(runtime);
+    }
+
     private String modelLabel(AiRuntimeSettings runtime) {
         return switch (runtime.provider()) {
             case "deepseek" -> runtime.deepSeekModel();
@@ -325,6 +339,10 @@ public class BatchJobService {
             case "mock" -> "本地规则模型";
             default -> runtime.provider();
         };
+    }
+
+    private boolean usedRuleFallback(AiAssessment assessment) {
+        return assessment.reasoningSummary().contains("已使用本地规则模型兜底");
     }
 
     private long elapsedMs(long started) {
