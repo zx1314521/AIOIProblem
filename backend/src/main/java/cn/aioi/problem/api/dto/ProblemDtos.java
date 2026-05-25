@@ -3,6 +3,7 @@ package cn.aioi.problem.api.dto;
 import cn.aioi.problem.domain.DifficultyLevel;
 import cn.aioi.problem.domain.Problem;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -21,6 +22,9 @@ public final class ProblemDtos {
             Set<String> tags,
             String source
     ) {
+    }
+
+    public record BulkProblemRequest(@NotEmpty List<@NotNull Long> problemIds) {
     }
 
     public record ProblemResponse(
@@ -50,4 +54,3 @@ public final class ProblemDtos {
         }
     }
 }
-

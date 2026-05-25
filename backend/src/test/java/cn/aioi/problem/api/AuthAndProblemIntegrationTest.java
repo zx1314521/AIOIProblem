@@ -2,6 +2,7 @@ package cn.aioi.problem.api;
 
 import cn.aioi.problem.api.dto.AuthDtos;
 import cn.aioi.problem.api.dto.ProblemDtos;
+import cn.aioi.problem.api.dto.ProblemSetDtos;
 import cn.aioi.problem.api.dto.RecommendationDtos;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -14,6 +15,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.context.ActiveProfiles;
 
+import java.util.List;
 import java.util.Set;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -163,7 +165,75 @@ class AuthAndProblemIntegrationTest {
                 .containsExactly("多标签排序 A", "多标签排序 B", "多标签排序 C", "多标签排序 D");
     }
 
-    private void createProblem(HttpHeaders headers, String title, Set<String> tags) {
+    @Test
+    void userCanBulkMarkPassedDeleteAndAddProblemsToSets() {
+        AuthDtos.AuthResponse auth = register("diana");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemDtos.ProblemResponse first = createProblem(headers, "批量操作 A", Set.of("模拟"));
+        ProblemDtos.ProblemResponse second = createProblem(headers, "批量操作 B", Set.of("贪心"));
+
+        ProblemDtos.BulkProblemRequest bulkRequest = new ProblemDtos.BulkProblemRequest(List.of(first.id(), second.id()));
+        ResponseEntity<ProblemDtos.ProblemResponse[]> passed = rest.exchange(
+                "/api/problems/bulk/passed",
+                HttpMethod.POST,
+                new HttpEntity<>(bulkRequest, headers),
+                ProblemDtos.ProblemResponse[].class
+        );
+
+        assertThat(passed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(passed.getBody()).isNotNull();
+        assertThat(passed.getBody()).extracting(ProblemDtos.ProblemResponse::passed).containsOnly(true);
+
+        ProblemSetDtos.ProblemSetWithProblemsRequest setRequest = new ProblemSetDtos.ProblemSetWithProblemsRequest(
+                "批量练习",
+                "从题目管理批量加入",
+                List.of(first.id(), second.id())
+        );
+        ResponseEntity<ProblemSetDtos.ProblemSetResponse> createdSet = rest.exchange(
+                "/api/problem-sets/with-problems",
+                HttpMethod.POST,
+                new HttpEntity<>(setRequest, headers),
+                ProblemSetDtos.ProblemSetResponse.class
+        );
+        assertThat(createdSet.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(createdSet.getBody()).isNotNull();
+        assertThat(createdSet.getBody().problems()).extracting(ProblemDtos.ProblemResponse::title)
+                .containsExactlyInAnyOrder("批量操作 A", "批量操作 B");
+
+        ResponseEntity<Void> deleted = rest.exchange(
+                "/api/problems/bulk",
+                HttpMethod.DELETE,
+                new HttpEntity<>(bulkRequest, headers),
+                Void.class
+        );
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<ProblemDtos.ProblemResponse[]> searched = rest.exchange(
+                "/api/problems?keyword=批量操作",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                ProblemDtos.ProblemResponse[].class
+        );
+        assertThat(searched.getBody()).isEmpty();
+    }
+
+    @Test
+    void rejectsNullIdsInBulkRequests() {
+        AuthDtos.AuthResponse auth = register("eric");
+        HttpHeaders headers = bearer(auth.token());
+
+        ResponseEntity<String> response = rest.exchange(
+                "/api/problems/bulk/passed",
+                HttpMethod.POST,
+                new HttpEntity<>("{\"problemIds\":[null]}", jsonHeaders(headers)),
+                String.class
+        );
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
+        assertThat(response.getBody()).contains("problemIds");
+    }
+
+    private ProblemDtos.ProblemResponse createProblem(HttpHeaders headers, String title, Set<String> tags) {
         ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
                 title,
                 "用于搜索排序的题面。",
@@ -178,6 +248,8 @@ class AuthAndProblemIntegrationTest {
                 ProblemDtos.ProblemResponse.class
         );
         assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(created.getBody()).isNotNull();
+        return created.getBody();
     }
 
     private AuthDtos.AuthResponse register(String username) {
@@ -194,6 +266,13 @@ class AuthAndProblemIntegrationTest {
     private HttpHeaders bearer(String token) {
         HttpHeaders headers = new HttpHeaders();
         headers.setBearerAuth(token);
+        return headers;
+    }
+
+    private HttpHeaders jsonHeaders(HttpHeaders source) {
+        HttpHeaders headers = new HttpHeaders();
+        headers.putAll(source);
+        headers.set("Content-Type", "application/json");
         return headers;
     }
 }

@@ -1,6 +1,7 @@
 package cn.aioi.problem.api.dto;
 
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotEmpty;
 import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Size;
 
@@ -17,6 +18,16 @@ public final class ProblemSetDtos {
     public record AddProblemRequest(@NotNull Long problemId) {
     }
 
+    public record AddProblemsRequest(@NotEmpty List<@NotNull Long> problemIds) {
+    }
+
+    public record ProblemSetWithProblemsRequest(
+            @NotBlank @Size(max = 160) String name,
+            String description,
+            @NotEmpty List<@NotNull Long> problemIds
+    ) {
+    }
+
     public record ProblemSetResponse(
             Long id,
             String name,
@@ -26,4 +37,3 @@ public final class ProblemSetDtos {
     ) {
     }
 }
-

@@ -39,10 +39,24 @@ public class ProblemSetService {
     }
 
     @Transactional
+    public ProblemSetDtos.ProblemSetResponse createWithProblems(ProblemSetDtos.ProblemSetWithProblemsRequest request, User user) {
+        ProblemSet set = problemSets.save(new ProblemSet(request.name().trim(), request.description(), user));
+        addProblemIds(set, request.problemIds());
+        return toResponse(set, user);
+    }
+
+    @Transactional
     public ProblemSetDtos.ProblemSetResponse addProblem(Long id, Long problemId, User user) {
         ProblemSet set = ownedSet(id, user);
         Problem problem = problemService.getProblem(problemId);
         set.addProblem(problem);
+        return toResponse(set, user);
+    }
+
+    @Transactional
+    public ProblemSetDtos.ProblemSetResponse addProblems(Long id, List<Long> problemIds, User user) {
+        ProblemSet set = ownedSet(id, user);
+        addProblemIds(set, problemIds);
         return toResponse(set, user);
     }
 
@@ -55,6 +69,13 @@ public class ProblemSetService {
 
     private ProblemSet ownedSet(Long id, User user) {
         return problemSets.findByIdAndOwner(id, user).orElseThrow(() -> new EntityNotFoundException("题单不存在"));
+    }
+
+    private void addProblemIds(ProblemSet set, List<Long> problemIds) {
+        problemIds.stream()
+                .distinct()
+                .map(problemService::getProblem)
+                .forEach(set::addProblem);
     }
 
     private ProblemSetDtos.ProblemSetResponse toResponse(ProblemSet set, User user) {

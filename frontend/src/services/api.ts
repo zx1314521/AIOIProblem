@@ -54,11 +54,19 @@ export const api = {
   deleteProblem: (id: number) => request<void>(`/api/problems/${id}`, { method: 'DELETE' }),
   markPassed: (id: number) => request<Problem>(`/api/problems/${id}/passed`, { method: 'POST' }),
   unmarkPassed: (id: number) => request<Problem>(`/api/problems/${id}/passed`, { method: 'DELETE' }),
+  markProblemsPassed: (problemIds: number[]) =>
+    request<Problem[]>('/api/problems/bulk/passed', { method: 'POST', body: JSON.stringify({ problemIds }) }),
+  deleteProblems: (problemIds: number[]) =>
+    request<void>('/api/problems/bulk', { method: 'DELETE', body: JSON.stringify({ problemIds }) }),
   listProblemSets: () => request<ProblemSet[]>('/api/problem-sets'),
   createProblemSet: (name: string, description: string) =>
     request<ProblemSet>('/api/problem-sets', { method: 'POST', body: JSON.stringify({ name, description }) }),
+  createProblemSetWithProblems: (name: string, description: string, problemIds: number[]) =>
+    request<ProblemSet>('/api/problem-sets/with-problems', { method: 'POST', body: JSON.stringify({ name, description, problemIds }) }),
   addProblemToSet: (setId: number, problemId: number) =>
     request<ProblemSet>(`/api/problem-sets/${setId}/items`, { method: 'POST', body: JSON.stringify({ problemId }) }),
+  addProblemsToSet: (setId: number, problemIds: number[]) =>
+    request<ProblemSet>(`/api/problem-sets/${setId}/items/bulk`, { method: 'POST', body: JSON.stringify({ problemIds }) }),
   removeProblemFromSet: (setId: number, problemId: number) =>
     request<ProblemSet>(`/api/problem-sets/${setId}/items/${problemId}`, { method: 'DELETE' }),
   recommendations: () => request<RecommendationResponse>('/api/recommendations')
