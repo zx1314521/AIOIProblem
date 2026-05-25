@@ -14,6 +14,8 @@ import java.util.Set;
 
 @Service
 public class TagCatalogService {
+    public static final String NO_TAG = "没有标签";
+
     private final List<TagDtos.TagCategory> categories;
     private final Set<String> standardTags;
     private final Set<String> categoryNames;
@@ -56,12 +58,13 @@ public class TagCatalogService {
         for (String tag : tags) {
             normalizeOne(tag).ifPresent(normalized::add);
         }
+        removeNoTagWhenRealTagsExist(normalized);
         return normalized.stream().limit(12).toList();
     }
 
     public List<String> normalizeAiTags(List<String> tags) {
         List<String> normalized = normalizeTags(tags);
-        return normalized.isEmpty() ? List.of("模拟") : normalized;
+        return normalized.isEmpty() ? List.of(NO_TAG) : normalized;
     }
 
     public java.util.Optional<String> normalizeOne(String raw) {
@@ -82,6 +85,7 @@ public class TagCatalogService {
 
     private List<TagDtos.TagCategory> buildCategories() {
         return List.of(
+                category("待人工标注", NO_TAG),
                 category("语言入门", "顺序结构", "分支结构", "循环结构", "数组", "字符串（入门）", "结构体", "函数与递归"),
                 category("字符串", "后缀自动机 SAM", "字典树 Trie", "AC 自动机", "KMP 算法", "后缀数组 SA", "后缀树", "有限状态自动机", "回文自动机 PAM", "Manacher 算法", "Lyndon 分解", "Z 函数", "后缀平衡树"),
                 category("动态规划 DP", "背包 DP", "数位 DP", "区间 DP", "树形 DP", "轮廓线 DP", "线性 DP", "状压 DP"),
@@ -110,6 +114,7 @@ public class TagCatalogService {
     private Map<String, String> buildAliases() {
         Map<String, String> map = new LinkedHashMap<>();
         standardTags.forEach(tag -> map.put(aliasKey(tag), tag));
+        alias(map, NO_TAG, "无标签", "未识别", "待标注", "no tag", "untagged");
         alias(map, "广度优先搜索 BFS", "BFS", "广搜", "宽搜");
         alias(map, "深度优先搜索 DFS", "DFS", "深搜");
         alias(map, "启发式迭代加深搜索 IDA*", "IDA", "IDA Star", "IDA*");
@@ -194,9 +199,15 @@ public class TagCatalogService {
         return normalized.replaceAll("[\\s_\\-:/,，、()（）]+", "");
     }
 
+    private void removeNoTagWhenRealTagsExist(LinkedHashSet<String> tags) {
+        if (tags.size() > 1) {
+            tags.remove(NO_TAG);
+        }
+    }
+
     private String buildPromptText() {
         List<String> lines = new ArrayList<>();
-        lines.add("tags 只能从以下标准二级标签中选择；一级分类不可作为标签；无法确定具体二级标签时不要输出该标签。");
+        lines.add("tags 只能从以下标准二级标签中选择；一级分类不可作为标签；无法确定具体二级标签时输出“" + NO_TAG + "”。");
         for (TagDtos.TagCategory category : categories) {
             lines.add(category.name() + "：" + String.join("、", category.tags()));
         }

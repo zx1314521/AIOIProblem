@@ -19,6 +19,18 @@ class ProblemServiceTagValidationTest {
     }
 
     @Test
+    void assignsNoTagPlaceholderWhenManualInputHasNoTags() {
+        assertThat(ProblemService.sanitizeTags(Set.of(), catalog))
+                .containsExactly("没有标签");
+    }
+
+    @Test
+    void dropsNoTagPlaceholderWhenManualInputHasRealTags() {
+        assertThat(ProblemService.sanitizeTags(new LinkedHashSet<>(List.of("没有标签", "最短路")), catalog))
+                .containsExactly("最短路");
+    }
+
+    @Test
     void rejectsCategoryUnknownAndBlankTagsForManualInput() {
         assertThatThrownBy(() -> ProblemService.sanitizeTags(new LinkedHashSet<>(List.of("图论", "未知标签", " ")), catalog))
                 .isInstanceOf(IllegalArgumentException.class)
@@ -39,7 +51,13 @@ class ProblemServiceTagValidationTest {
 
     @Test
     void normalizesAiTagsBeforeSavingBatchResults() {
-        assertThat(ProblemService.sanitizeAiTags(List.of("图论", "shortest path", "DFS", "未知标签"), catalog))
+        assertThat(ProblemService.sanitizeAiTags(List.of("图论", "shortest path", "DFS", "没有标签", "未知标签"), catalog))
                 .containsExactly("最短路", "深度优先搜索 DFS");
+    }
+
+    @Test
+    void assignsNoTagPlaceholderBeforeSavingBatchResultsWithNoKnownTags() {
+        assertThat(ProblemService.sanitizeAiTags(List.of("图论", "未知标签"), catalog))
+                .containsExactly("没有标签");
     }
 }

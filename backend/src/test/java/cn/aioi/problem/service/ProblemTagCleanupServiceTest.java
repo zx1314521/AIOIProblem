@@ -31,4 +31,20 @@ class ProblemTagCleanupServiceTest {
 
         assertThat(problem.getTags()).containsExactly("最短路", "KMP 算法");
     }
+
+    @Test
+    void marksExistingProblemsWithNoValidTagsAsUntagged() {
+        Problem problem = new Problem(
+                "旧无标签数据",
+                "题面",
+                DifficultyLevel.EASY,
+                new LinkedHashSet<>(List.of("图论", "未知标签")),
+                "legacy",
+                null
+        );
+
+        cleanup.normalizeProblemTags(problem);
+
+        assertThat(problem.getTags()).containsExactly("没有标签");
+    }
 }

@@ -20,6 +20,7 @@ class TagCatalogServiceTest {
         assertThat(catalog.isCategory("图论")).isTrue();
         assertThat(catalog.isStandardTag("图论")).isFalse();
         assertThat(catalog.isStandardTag("最短路")).isTrue();
+        assertThat(catalog.isStandardTag("没有标签")).isTrue();
     }
 
     @Test
@@ -55,8 +56,14 @@ class TagCatalogServiceTest {
     }
 
     @Test
-    void fallsBackToSimulationWhenAiTagsHaveNoStandardMatch() {
-        assertThat(catalog.normalizeAiTags(List.of("DP", "图论", "unknown"))).containsExactly("模拟");
+    void marksAiTagsAsUntaggedWhenNoStandardMatchRemains() {
+        assertThat(catalog.normalizeAiTags(List.of("DP", "图论", "unknown"))).containsExactly("没有标签");
+    }
+
+    @Test
+    void removesNoTagPlaceholderWhenRealTagsExist() {
+        assertThat(catalog.normalizeTags(List.of("没有标签", "BFS", "无标签")))
+                .containsExactly("广度优先搜索 BFS");
     }
 
     @Test
@@ -64,6 +71,7 @@ class TagCatalogServiceTest {
         String prompt = catalog.promptText();
 
         assertThat(prompt).contains("一级分类不可作为标签");
+        assertThat(prompt).contains("待人工标注：没有标签");
         assertThat(prompt).contains("图论：Kruskal 重构树、网络流");
         assertThat(prompt).contains("基础算法：模拟、贪心");
     }

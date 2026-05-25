@@ -33,11 +33,18 @@ class AiAssessmentParserTest {
     }
 
     @Test
-    void fallsBackToSimulationWhenNoLegalTagRemains() {
+    void marksUntaggedWhenNoLegalTagRemains() {
         AiAssessment assessment = parser.parse("""
                 {"difficulty":"简单","confidence":0.8,"tags":["DP","图论","未知"],"hints":[],"reasoningSummary":"x"}
                 """);
 
-        assertThat(assessment.tags()).containsExactly("模拟");
+        assertThat(assessment.tags()).containsExactly("没有标签");
+    }
+
+    @Test
+    void marksUntaggedWhenJsonCannotBeParsed() {
+        AiAssessment assessment = parser.parse("not json");
+
+        assertThat(assessment.tags()).containsExactly("没有标签");
     }
 }

@@ -34,7 +34,7 @@ public class AiAssessmentParser {
             String summary = node.path("reasoningSummary").asText("基于题面综合判断。");
             return new AiAssessment(difficulty, confidence, tags, hints, summary);
         } catch (Exception exception) {
-            return new AiAssessment(DifficultyLevel.EASY, 0.35, List.of("模拟"), List.of("先尝试直接模拟题意。"), "AI 输出解析失败，已使用保守默认判断。");
+            return new AiAssessment(DifficultyLevel.EASY, 0.35, List.of(TagCatalogService.NO_TAG), List.of("先人工阅读题面，补充核心算法标签。"), "AI 输出解析失败，已标记为待人工补标签。");
         }
     }
 

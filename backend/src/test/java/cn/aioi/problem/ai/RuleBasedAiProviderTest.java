@@ -16,4 +16,13 @@ class RuleBasedAiProviderTest {
         assertThat(assessment.difficulty().rank()).isGreaterThanOrEqualTo(3);
         assertThat(assessment.hints()).hasSize(3);
     }
+
+    @Test
+    void marksUntaggedWhenRulesFindNoKnownAlgorithm() {
+        RuleBasedAiProvider provider = new RuleBasedAiProvider();
+
+        AiAssessment assessment = provider.assess(new ProblemInput("普通题", "阅读题面并输出答案。"));
+
+        assertThat(assessment.tags()).containsExactly("没有标签");
+    }
 }

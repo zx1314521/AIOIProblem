@@ -114,8 +114,8 @@ public class ProblemService {
     }
 
     static Set<String> sanitizeTags(Set<String> tags, TagCatalogService tagCatalog) {
-        if (tags == null) {
-            return Set.of();
+        if (tags == null || tags.isEmpty()) {
+            return Set.of(TagCatalogService.NO_TAG);
         }
         Set<String> clean = new LinkedHashSet<>();
         List<String> invalid = new java.util.ArrayList<>();
@@ -135,11 +135,24 @@ public class ProblemService {
         if (!invalid.isEmpty()) {
             throw new IllegalArgumentException("未知标签：" + String.join("、", invalid));
         }
-        return clean.stream().limit(12).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
+        Set<String> normalized = normalizeNoTagPlaceholder(clean);
+        return normalized.stream().limit(12).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
     static Set<String> sanitizeAiTags(List<String> tags, TagCatalogService tagCatalog) {
         return new LinkedHashSet<>(tagCatalog.normalizeAiTags(tags));
+    }
+
+    private static Set<String> normalizeNoTagPlaceholder(Set<String> tags) {
+        if (tags.isEmpty()) {
+            return Set.of(TagCatalogService.NO_TAG);
+        }
+        if (tags.size() > 1 && tags.contains(TagCatalogService.NO_TAG)) {
+            LinkedHashSet<String> withoutPlaceholder = new LinkedHashSet<>(tags);
+            withoutPlaceholder.remove(TagCatalogService.NO_TAG);
+            return withoutPlaceholder;
+        }
+        return tags;
     }
 
     private String normalizeSearchTag(String tag) {

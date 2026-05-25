@@ -1,6 +1,7 @@
 package cn.aioi.problem.ai;
 
 import cn.aioi.problem.domain.DifficultyLevel;
+import cn.aioi.problem.service.TagCatalogService;
 import org.springframework.stereotype.Component;
 
 import java.util.ArrayList;
@@ -39,7 +40,7 @@ public class RuleBasedAiProvider implements AiProvider {
             score += 1;
         }
         if (tags.isEmpty()) {
-            tags.add("模拟");
+            tags.add(TagCatalogService.NO_TAG);
         }
 
         DifficultyLevel difficulty = switch (Math.min(score, 6)) {

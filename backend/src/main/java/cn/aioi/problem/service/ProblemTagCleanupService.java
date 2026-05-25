@@ -28,6 +28,9 @@ public class ProblemTagCleanupService {
 
     void normalizeProblemTags(Problem problem) {
         Set<String> normalized = new LinkedHashSet<>(tagCatalog.normalizeTags(problem.getTags().stream().toList()));
+        if (normalized.isEmpty()) {
+            normalized.add(TagCatalogService.NO_TAG);
+        }
         if (!normalized.equals(problem.getTags())) {
             problem.update(
                     problem.getTitle(),
