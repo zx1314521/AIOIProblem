@@ -16,7 +16,11 @@ import jakarta.persistence.Table;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.stream.Collectors;
 
 @Entity
 @Table(name = "problem_sets")
@@ -67,6 +71,23 @@ public class ProblemSet {
         items.removeIf(item -> item.getProblem().getId().equals(problemId));
     }
 
+    public void reorderProblems(List<Long> problemIds) {
+        Set<Long> currentIds = items.stream()
+                .map(item -> item.getProblem().getId())
+                .collect(Collectors.toSet());
+        LinkedHashSet<Long> requestedIds = new LinkedHashSet<>(problemIds);
+        if (requestedIds.size() != problemIds.size() || !requestedIds.equals(currentIds)) {
+            throw new IllegalArgumentException("题单排序必须包含当前题单的全部题目");
+        }
+
+        Map<Long, ProblemSetItem> itemByProblemId = items.stream()
+                .collect(Collectors.toMap(item -> item.getProblem().getId(), item -> item));
+        int sortOrder = 0;
+        for (Long problemId : problemIds) {
+            itemByProblemId.get(problemId).updateSortOrder(sortOrder++);
+        }
+    }
+
     public Long getId() {
         return id;
     }
@@ -87,4 +108,3 @@ public class ProblemSet {
         return createdAt;
     }
 }
-

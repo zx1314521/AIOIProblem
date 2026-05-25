@@ -55,6 +55,13 @@ public class ProblemSetController {
         return problemSetService.addProblems(id, request.problemIds(), principal.user());
     }
 
+    @PostMapping("/{id}/items/reorder")
+    ProblemSetDtos.ProblemSetResponse reorderProblems(@PathVariable Long id,
+                                                      @Valid @RequestBody ProblemSetDtos.ReorderProblemsRequest request,
+                                                      @AuthenticationPrincipal UserPrincipal principal) {
+        return problemSetService.reorderProblems(id, request.problemIds(), principal.user());
+    }
+
     @DeleteMapping("/{id}/items/{problemId}")
     ProblemSetDtos.ProblemSetResponse removeProblem(@PathVariable Long id,
                                                     @PathVariable Long problemId,

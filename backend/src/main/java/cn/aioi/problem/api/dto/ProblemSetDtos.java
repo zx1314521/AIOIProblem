@@ -21,6 +21,9 @@ public final class ProblemSetDtos {
     public record AddProblemsRequest(@NotEmpty List<@NotNull Long> problemIds) {
     }
 
+    public record ReorderProblemsRequest(@NotEmpty List<@NotNull Long> problemIds) {
+    }
+
     public record ProblemSetWithProblemsRequest(
             @NotBlank @Size(max = 160) String name,
             String description,

@@ -67,8 +67,16 @@ public class ProblemSetService {
         return toResponse(set, user);
     }
 
+    @Transactional
+    public ProblemSetDtos.ProblemSetResponse reorderProblems(Long id, List<Long> problemIds, User user) {
+        ProblemSet set = ownedSet(id, user);
+        set.reorderProblems(problemIds);
+        return toResponse(set, user);
+    }
+
     private ProblemSet ownedSet(Long id, User user) {
-        return problemSets.findByIdAndOwner(id, user).orElseThrow(() -> new EntityNotFoundException("题单不存在"));
+        return problemSets.findByIdAndOwner(id, user)
+                .orElseThrow(() -> new EntityNotFoundException("题单不存在"));
     }
 
     private void addProblemIds(ProblemSet set, List<Long> problemIds) {

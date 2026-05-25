@@ -69,6 +69,8 @@ export const api = {
     request<ProblemSet>(`/api/problem-sets/${setId}/items/bulk`, { method: 'POST', body: JSON.stringify({ problemIds }) }),
   removeProblemFromSet: (setId: number, problemId: number) =>
     request<ProblemSet>(`/api/problem-sets/${setId}/items/${problemId}`, { method: 'DELETE' }),
+  reorderProblemSetItems: (setId: number, problemIds: number[]) =>
+    request<ProblemSet>(`/api/problem-sets/${setId}/items/reorder`, { method: 'POST', body: JSON.stringify({ problemIds }) }),
   recommendations: () => request<RecommendationResponse>('/api/recommendations')
   ,
   getAiSettings: () => request<AiSettings>('/api/settings/ai'),

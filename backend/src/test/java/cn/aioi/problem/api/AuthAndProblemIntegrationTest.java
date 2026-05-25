@@ -233,6 +233,44 @@ class AuthAndProblemIntegrationTest {
         assertThat(response.getBody()).contains("problemIds");
     }
 
+    @Test
+    void userCanReorderProblemSetItems() {
+        AuthDtos.AuthResponse auth = register("fiona");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemDtos.ProblemResponse first = createProblem(headers, "题单排序 A", Set.of("模拟"));
+        ProblemDtos.ProblemResponse second = createProblem(headers, "题单排序 B", Set.of("贪心"));
+        ProblemDtos.ProblemResponse third = createProblem(headers, "题单排序 C", Set.of("最短路"));
+
+        ProblemSetDtos.ProblemSetWithProblemsRequest setRequest = new ProblemSetDtos.ProblemSetWithProblemsRequest(
+                "排序训练",
+                "调整练习顺序",
+                List.of(first.id(), second.id(), third.id())
+        );
+        ResponseEntity<ProblemSetDtos.ProblemSetResponse> createdSet = rest.exchange(
+                "/api/problem-sets/with-problems",
+                HttpMethod.POST,
+                new HttpEntity<>(setRequest, headers),
+                ProblemSetDtos.ProblemSetResponse.class
+        );
+        assertThat(createdSet.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(createdSet.getBody()).isNotNull();
+
+        ProblemSetDtos.ReorderProblemsRequest reorderRequest = new ProblemSetDtos.ReorderProblemsRequest(
+                List.of(third.id(), first.id(), second.id())
+        );
+        ResponseEntity<ProblemSetDtos.ProblemSetResponse> reordered = rest.exchange(
+                "/api/problem-sets/" + createdSet.getBody().id() + "/items/reorder",
+                HttpMethod.POST,
+                new HttpEntity<>(reorderRequest, headers),
+                ProblemSetDtos.ProblemSetResponse.class
+        );
+
+        assertThat(reordered.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(reordered.getBody()).isNotNull();
+        assertThat(reordered.getBody().problems()).extracting(ProblemDtos.ProblemResponse::title)
+                .containsExactly("题单排序 C", "题单排序 A", "题单排序 B");
+    }
+
     private ProblemDtos.ProblemResponse createProblem(HttpHeaders headers, String title, Set<String> tags) {
         ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
                 title,

@@ -43,5 +43,8 @@ public class ProblemSetItem {
     public int getSortOrder() {
         return sortOrder;
     }
-}
 
+    public void updateSortOrder(int sortOrder) {
+        this.sortOrder = sortOrder;
+    }
+}
