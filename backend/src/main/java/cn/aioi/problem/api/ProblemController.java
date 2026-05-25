@@ -32,8 +32,9 @@ public class ProblemController {
     List<ProblemDtos.ProblemResponse> search(@RequestParam(required = false) String keyword,
                                              @RequestParam(required = false) String difficulty,
                                              @RequestParam(required = false) String tag,
+                                             @RequestParam(required = false) List<String> tags,
                                              @AuthenticationPrincipal UserPrincipal principal) {
-        return problemService.search(keyword, difficulty, tag, principal.user());
+        return problemService.search(keyword, difficulty, tag, tags, principal.user());
     }
 
     @PostMapping

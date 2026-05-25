@@ -50,6 +50,18 @@ public class TagCatalogService {
         return standardTags.contains(cleanDisplay(value));
     }
 
+    public Set<String> relatedTags(String value) {
+        String display = cleanDisplay(value);
+        if (!standardTags.contains(display)) {
+            return Set.of();
+        }
+        return categories.stream()
+                .filter(category -> category.tags().contains(display))
+                .findFirst()
+                .map(category -> new LinkedHashSet<>(category.tags()))
+                .orElseGet(LinkedHashSet::new);
+    }
+
     public List<String> normalizeTags(List<String> tags) {
         if (tags == null || tags.isEmpty()) {
             return List.of();

@@ -14,10 +14,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Comparator;
+import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class ProblemService {
@@ -37,17 +40,16 @@ public class ProblemService {
         this.tagCatalog = tagCatalog;
     }
 
-    public List<ProblemDtos.ProblemResponse> search(String keyword, String difficulty, String tag, User user) {
+    public List<ProblemDtos.ProblemResponse> search(String keyword, String difficulty, String tag, List<String> tags, User user) {
         DifficultyLevel parsedDifficulty = difficulty == null || difficulty.isBlank()
                 ? null
                 : DifficultyLevel.fromLabelOrName(difficulty);
         String normalizedKeyword = lowerOrNull(keyword);
-        String normalizedTag = normalizeSearchTag(tag);
+        List<String> normalizedTags = normalizeSearchTags(tag, tags);
         return problems.findAllWithTags().stream()
                 .filter(problem -> matchesKeyword(problem, normalizedKeyword))
                 .filter(problem -> parsedDifficulty == null || problem.getDifficulty() == parsedDifficulty)
-                .filter(problem -> matchesTag(problem, normalizedTag))
-                .sorted(Comparator.comparing(Problem::getCreatedAt).reversed())
+                .sorted(searchComparator(normalizedTags))
                 .map(problem -> ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem)))
                 .toList();
     }
@@ -155,15 +157,27 @@ public class ProblemService {
         return tags;
     }
 
-    private String normalizeSearchTag(String tag) {
-        String cleaned = blankToNull(tag);
-        if (cleaned == null) {
-            return null;
+    private List<String> normalizeSearchTags(String tag, List<String> tags) {
+        List<String> values = new ArrayList<>();
+        if (tags != null) {
+            values.addAll(tags);
         }
-        if (!tagCatalog.isStandardTag(cleaned)) {
-            throw new IllegalArgumentException("未知标签：" + cleaned);
+        String legacyTag = blankToNull(tag);
+        if (legacyTag != null) {
+            values.add(legacyTag);
         }
-        return cleaned.toLowerCase(Locale.ROOT);
+        LinkedHashSet<String> clean = new LinkedHashSet<>();
+        for (String value : values) {
+            String cleaned = blankToNull(value);
+            if (cleaned == null) {
+                continue;
+            }
+            if (!tagCatalog.isStandardTag(cleaned)) {
+                throw new IllegalArgumentException("未知标签：" + cleaned);
+            }
+            clean.add(cleaned);
+        }
+        return clean.stream().toList();
     }
 
     private static String blankToNull(String value) {
@@ -183,10 +197,23 @@ public class ProblemService {
                 || problem.getDescription().toLowerCase(Locale.ROOT).contains(keyword);
     }
 
-    private boolean matchesTag(Problem problem, String tag) {
-        if (tag == null) {
-            return true;
+    private Comparator<Problem> searchComparator(List<String> selectedTags) {
+        Comparator<Problem> recentFirst = Comparator.comparing(Problem::getCreatedAt).reversed();
+        if (selectedTags.isEmpty()) {
+            return recentFirst;
         }
-        return problem.getTags().stream().anyMatch(item -> item.toLowerCase(Locale.ROOT).equals(tag));
+        Set<String> relatedTags = selectedTags.stream()
+                .flatMap(tag -> tagCatalog.relatedTags(tag).stream())
+                .filter(tag -> !selectedTags.contains(tag))
+                .collect(Collectors.toCollection(HashSet::new));
+        return Comparator.comparingInt((Problem problem) -> relevanceScore(problem, selectedTags, relatedTags))
+                .reversed()
+                .thenComparing(recentFirst);
+    }
+
+    private int relevanceScore(Problem problem, List<String> selectedTags, Set<String> relatedTags) {
+        int exact = (int) selectedTags.stream().filter(problem.getTags()::contains).count();
+        int related = (int) problem.getTags().stream().filter(relatedTags::contains).count();
+        return exact * 100 + related * 20;
     }
 }

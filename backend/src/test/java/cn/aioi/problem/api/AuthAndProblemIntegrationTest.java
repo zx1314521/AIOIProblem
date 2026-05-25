@@ -48,7 +48,7 @@ class AuthAndProblemIntegrationTest {
         assertThat(created.getBody().difficulty()).isEqualTo("CSPJ中等");
 
         ResponseEntity<ProblemDtos.ProblemResponse[]> searched = rest.exchange(
-                "/api/problems?tag=最短路",
+                "/api/problems?keyword=最短路入门&tag=最短路",
                 HttpMethod.GET,
                 new HttpEntity<>(headers),
                 ProblemDtos.ProblemResponse[].class
@@ -139,6 +139,45 @@ class AuthAndProblemIntegrationTest {
 
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.BAD_REQUEST);
         assertThat(response.getBody()).contains("未知标签");
+    }
+
+    @Test
+    void multiTagSearchRanksExactMatchesBeforePartialAndRelatedResults() {
+        AuthDtos.AuthResponse auth = register("carol");
+        HttpHeaders headers = bearer(auth.token());
+        createProblem(headers, "多标签排序 A", Set.of("最短路", "网络流"));
+        createProblem(headers, "多标签排序 B", Set.of("最短路"));
+        createProblem(headers, "多标签排序 C", Set.of("图遍历"));
+        createProblem(headers, "多标签排序 D", Set.of("模拟"));
+
+        ResponseEntity<ProblemDtos.ProblemResponse[]> searched = rest.exchange(
+                "/api/problems?keyword=多标签排序&tags=最短路&tags=网络流",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                ProblemDtos.ProblemResponse[].class
+        );
+
+        assertThat(searched.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(searched.getBody()).isNotNull();
+        assertThat(java.util.Arrays.stream(searched.getBody()).map(ProblemDtos.ProblemResponse::title).toList())
+                .containsExactly("多标签排序 A", "多标签排序 B", "多标签排序 C", "多标签排序 D");
+    }
+
+    private void createProblem(HttpHeaders headers, String title, Set<String> tags) {
+        ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
+                title,
+                "用于搜索排序的题面。",
+                "简单",
+                tags,
+                "test"
+        );
+        ResponseEntity<ProblemDtos.ProblemResponse> created = rest.exchange(
+                "/api/problems",
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                ProblemDtos.ProblemResponse.class
+        );
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
     }
 
     private AuthDtos.AuthResponse register(String username) {

@@ -12,7 +12,7 @@ const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItK
 
 const keyword = ref('')
 const difficulty = ref('')
-const selectedFilterTag = ref('')
+const selectedFilterTags = ref<string[]>([])
 const tagSearch = ref('')
 const formTagSearch = ref('')
 const tagCategories = ref<TagCategory[]>([])
@@ -40,13 +40,28 @@ const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困�
 const difficultyRank = new Map(difficulties.map((item, index) => [item, index]))
 
 const sortedProblems = computed(() => {
-  const direction = sortDirection.value === 'asc' ? 1 : -1
-  return [...problems.value].sort((a, b) => compareProblem(a, b) * direction)
+  return [...problems.value].sort(compareProblem)
 })
 const formTitle = computed(() => formMode.value === 'create' ? '新建题目' : '编辑题目')
 const detailHtml = computed(() => markdown.render(normalizeProblemMath(selectedProblem.value?.description || '')))
 const filteredTagCategories = computed(() => filterCategories(tagSearch.value))
 const filteredFormTagCategories = computed(() => filterCategories(formTagSearch.value))
+const selectedFilterTagSet = computed(() => new Set(selectedFilterTags.value))
+const relatedFilterTagSet = computed(() => {
+  const related = new Set<string>()
+  for (const tag of selectedFilterTags.value) {
+    for (const category of tagCategories.value) {
+      if (category.tags.includes(tag)) {
+        category.tags.forEach(item => {
+          if (!selectedFilterTagSet.value.has(item)) {
+            related.add(item)
+          }
+        })
+      }
+    }
+  }
+  return related
+})
 
 async function loadCatalog() {
   try {
@@ -62,7 +77,7 @@ async function load() {
   const params = new URLSearchParams()
   if (keyword.value) params.set('keyword', keyword.value)
   if (difficulty.value) params.set('difficulty', difficulty.value)
-  if (selectedFilterTag.value) params.set('tag', selectedFilterTag.value)
+  selectedFilterTags.value.forEach(tag => params.append('tags', tag))
   try {
     problems.value = await api.searchProblems(params)
   } catch (err) {
@@ -167,13 +182,20 @@ function toggleSortDirection() {
 }
 
 function compareProblem(a: Problem, b: Problem) {
+  if (selectedFilterTags.value.length) {
+    const relevance = searchRelevance(b).score - searchRelevance(a).score
+    if (relevance !== 0) {
+      return relevance
+    }
+  }
+  const direction = sortDirection.value === 'asc' ? 1 : -1
   if (sortKey.value === 'title') {
-    return a.title.localeCompare(b.title, 'zh-Hans-CN')
+    return a.title.localeCompare(b.title, 'zh-Hans-CN') * direction
   }
   if (sortKey.value === 'difficulty') {
-    return (difficultyRank.get(a.difficulty) ?? 0) - (difficultyRank.get(b.difficulty) ?? 0)
+    return ((difficultyRank.get(a.difficulty) ?? 0) - (difficultyRank.get(b.difficulty) ?? 0)) * direction
   }
-  return Date.parse(a.createdAt) - Date.parse(b.createdAt)
+  return (Date.parse(a.createdAt) - Date.parse(b.createdAt)) * direction
 }
 
 function filterCategories(query: string) {
@@ -190,7 +212,9 @@ function filterCategories(query: string) {
 }
 
 function chooseFilterTag(value: string) {
-  selectedFilterTag.value = selectedFilterTag.value === value ? '' : value
+  selectedFilterTags.value = selectedFilterTags.value.includes(value)
+    ? selectedFilterTags.value.filter(tag => tag !== value)
+    : [...selectedFilterTags.value, value]
 }
 
 function toggleFormTag(value: string) {
@@ -202,6 +226,32 @@ function toggleFormTag(value: string) {
 function formatDate(value: string) {
   return new Intl.DateTimeFormat('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
     .format(new Date(value))
+}
+
+function searchRelevance(problem: Problem) {
+  if (!selectedFilterTags.value.length) {
+    return { score: 0, exact: 0, related: 0 }
+  }
+  const exact = selectedFilterTags.value.filter(tag => problem.tags.includes(tag)).length
+  const related = problem.tags.filter(tag => relatedFilterTagSet.value.has(tag)).length
+  return { score: exact * 100 + related * 20, exact, related }
+}
+
+function relevanceLabel(problem: Problem) {
+  const relevance = searchRelevance(problem)
+  if (!selectedFilterTags.value.length) {
+    return ''
+  }
+  if (relevance.exact === selectedFilterTags.value.length) {
+    return `完全匹配 ${relevance.exact}/${selectedFilterTags.value.length}`
+  }
+  if (relevance.exact > 0) {
+    return `命中 ${relevance.exact}/${selectedFilterTags.value.length}`
+  }
+  if (relevance.related > 0) {
+    return '同类相关'
+  }
+  return '低相关'
 }
 
 onMounted(async () => {
@@ -233,16 +283,25 @@ onMounted(async () => {
     </div>
 
     <div class="tag-picker">
-      <button v-if="selectedFilterTag" class="tag-choice active" type="button" @click="chooseFilterTag(selectedFilterTag)">
-        {{ selectedFilterTag }} <X :size="14" />
-      </button>
+      <div v-if="selectedFilterTags.length" class="selected-filter-tags">
+        <button
+          v-for="item in selectedFilterTags"
+          :key="item"
+          class="tag-choice active"
+          type="button"
+          :aria-label="`移除筛选标签 ${item}`"
+          @click="chooseFilterTag(item)"
+        >
+          {{ item }} <X :size="14" />
+        </button>
+      </div>
       <div v-for="category in filteredTagCategories" :key="category.name" class="tag-group">
         <span class="tag-group-title">{{ category.name }}</span>
         <button
           v-for="item in category.tags"
           :key="item"
           class="tag-choice"
-          :class="{ active: selectedFilterTag === item }"
+          :class="{ active: selectedFilterTags.includes(item) }"
           type="button"
           :aria-label="`选择标签 ${item}`"
           @click="chooseFilterTag(item)"
@@ -285,6 +344,7 @@ onMounted(async () => {
           <div class="tag-row">
             <span v-for="item in problem.tags" :key="item" class="tag">{{ item }}</span>
             <span v-if="problem.passed" class="tag passed-tag">已通过</span>
+            <span v-if="selectedFilterTags.length" class="match-chip">{{ relevanceLabel(problem) }}</span>
             <span class="muted">{{ formatDate(problem.createdAt) }}</span>
           </div>
         </div>
@@ -454,6 +514,14 @@ h2 {
   flex-wrap: wrap;
 }
 
+.selected-filter-tags {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  padding-bottom: 10px;
+  border-bottom: 1px solid #e5ece5;
+}
+
 .tag-group-title {
   min-width: 104px;
   padding-top: 7px;
@@ -535,6 +603,16 @@ h2 {
   border-color: #a9c7b9;
   background: #edf7f1;
   color: #1f6f54;
+}
+
+.match-chip {
+  border: 1px solid #d7c392;
+  background: #fff7df;
+  color: #7a5512;
+  border-radius: 999px;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 700;
 }
 
 .pass-toggle.passed {

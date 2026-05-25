@@ -47,6 +47,39 @@ const sampleProblems: Problem[] = [
   }
 ]
 
+const searchProblems: Problem[] = [
+  {
+    id: 10,
+    title: '完全匹配',
+    description: '题面',
+    difficulty: '简单',
+    difficultyCode: 'EASY',
+    tags: ['最短路', '网络流'],
+    createdAt: '2026-05-20T00:00:00',
+    passed: false
+  },
+  {
+    id: 11,
+    title: '部分匹配',
+    description: '题面',
+    difficulty: '简单',
+    difficultyCode: 'EASY',
+    tags: ['最短路'],
+    createdAt: '2026-05-24T00:00:00',
+    passed: false
+  },
+  {
+    id: 12,
+    title: '同类相关',
+    description: '题面',
+    difficulty: '简单',
+    difficultyCode: 'EASY',
+    tags: ['图遍历'],
+    createdAt: '2026-05-25T00:00:00',
+    passed: false
+  }
+]
+
 beforeEach(() => {
   vi.mocked(api.getTags).mockResolvedValue(catalog)
 })
@@ -93,17 +126,22 @@ test('toggles passed state from problem list', async () => {
   expect(await screen.findByRole('button', { name: '通过' })).toBeTruthy()
 })
 
-test('loads tag catalog and searches by selected standard tag', async () => {
-  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+test('loads tag catalog and searches by multiple standard tags with relevance first', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(searchProblems)
 
   render(ProblemsView)
 
   await screen.findByText('网络流')
+  await userEvent.click(screen.getByRole('button', { name: '选择标签 最短路' }))
   await userEvent.click(screen.getByRole('button', { name: '选择标签 网络流' }))
+  expect(screen.getByRole('button', { name: /移除筛选标签 最短路/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /移除筛选标签 网络流/ })).toBeTruthy()
   await userEvent.click(screen.getByRole('button', { name: /搜索/ }))
 
   await waitFor(() => {
-    expect(api.searchProblems).toHaveBeenLastCalledWith(new URLSearchParams('tag=%E7%BD%91%E7%BB%9C%E6%B5%81'))
+    expect(api.searchProblems).toHaveBeenLastCalledWith(new URLSearchParams('tags=%E6%9C%80%E7%9F%AD%E8%B7%AF&tags=%E7%BD%91%E7%BB%9C%E6%B5%81'))
+    const titles = Array.from(document.querySelectorAll('.problem-row h3')).map(node => node.textContent)
+    expect(titles).toEqual(['完全匹配', '部分匹配', '同类相关'])
   })
 })
 
