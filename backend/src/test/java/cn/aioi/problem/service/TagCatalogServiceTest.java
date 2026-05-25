@@ -23,6 +23,19 @@ class TagCatalogServiceTest {
     }
 
     @Test
+    void preservesUtf8CatalogTextAtRuntime() {
+        String graphTheory = "\u56fe\u8bba";
+        String shortestPath = "\u6700\u77ed\u8def";
+
+        assertThat(catalog.categories())
+                .anySatisfy(category -> {
+                    assertThat(category.name()).isEqualTo(graphTheory);
+                    assertThat(category.tags()).contains(shortestPath);
+                });
+        assertThat(catalog.isStandardTag(shortestPath)).isTrue();
+    }
+
+    @Test
     void normalizesAliasesPunctuationCaseWhitespaceAndDuplicates() {
         assertThat(catalog.normalizeTags(List.of(" BFS ", "广搜", "DP", "Segment Tree", "线段树 Beats", "图论", "未知标签")))
                 .containsExactly("广度优先搜索 BFS", "线段树", "吉司机线段树 segment tree beats");
