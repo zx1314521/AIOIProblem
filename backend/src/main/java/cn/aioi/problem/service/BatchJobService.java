@@ -28,7 +28,6 @@ import org.springframework.web.multipart.MultipartFile;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.HashSet;
-import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Optional;
 import java.util.Set;
@@ -43,17 +42,20 @@ public class BatchJobService {
     private final ProblemRepository problems;
     private final UserRepository users;
     private final AiProvider aiProvider;
+    private final TagCatalogService tagCatalog;
     private final TransactionTemplate transactionTemplate;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
 
     public BatchJobService(BatchJobRepository jobs, BatchJobItemRepository items, ProblemRepository problems,
-                           UserRepository users, AiProvider aiProvider, PlatformTransactionManager transactionManager) {
+                           UserRepository users, AiProvider aiProvider, TagCatalogService tagCatalog,
+                           PlatformTransactionManager transactionManager) {
         this.jobs = jobs;
         this.items = items;
         this.problems = problems;
         this.users = users;
         this.aiProvider = aiProvider;
+        this.tagCatalog = tagCatalog;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -223,7 +225,7 @@ public class BatchJobService {
                         workItem.title(),
                         workItem.content(),
                         assessment.difficulty(),
-                        new LinkedHashSet<>(assessment.tags()),
+                        ProblemService.sanitizeAiTags(assessment.tags(), tagCatalog),
                         "批量导入",
                         owner
                 ));

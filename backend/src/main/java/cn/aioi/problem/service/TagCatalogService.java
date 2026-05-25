@@ -130,7 +130,7 @@ public class TagCatalogService {
         alias(map, "强连通分量", "SCC", "强连通", "强联通分量");
         alias(map, "双连通分量", "BCC", "双连通", "双联通分量");
         alias(map, "2-SAT", "2sat");
-        alias(map, "最短路", "最短路径");
+        alias(map, "最短路", "最短路径", "shortest path");
         alias(map, "生成树", "MST", "最小生成树");
         alias(map, "网络流", "最大流", "Dinic", "ISAP");
         alias(map, "费用流", "MCMF", "最小费用最大流");

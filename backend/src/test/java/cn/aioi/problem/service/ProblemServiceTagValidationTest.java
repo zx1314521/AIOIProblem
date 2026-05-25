@@ -36,4 +36,10 @@ class ProblemServiceTagValidationTest {
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("未知标签：未知标签");
     }
+
+    @Test
+    void normalizesAiTagsBeforeSavingBatchResults() {
+        assertThat(ProblemService.sanitizeAiTags(List.of("图论", "shortest path", "DFS", "未知标签"), catalog))
+                .containsExactly("最短路", "深度优先搜索 DFS");
+    }
 }

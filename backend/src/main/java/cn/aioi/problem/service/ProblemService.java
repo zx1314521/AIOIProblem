@@ -138,6 +138,10 @@ public class ProblemService {
         return clean.stream().limit(12).collect(java.util.stream.Collectors.toCollection(LinkedHashSet::new));
     }
 
+    static Set<String> sanitizeAiTags(List<String> tags, TagCatalogService tagCatalog) {
+        return new LinkedHashSet<>(tagCatalog.normalizeAiTags(tags));
+    }
+
     private String normalizeSearchTag(String tag) {
         String cleaned = blankToNull(tag);
         if (cleaned == null) {
