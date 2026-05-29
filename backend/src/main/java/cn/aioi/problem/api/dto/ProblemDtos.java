@@ -27,6 +27,35 @@ public final class ProblemDtos {
     public record BulkProblemRequest(@NotEmpty List<@NotNull Long> problemIds) {
     }
 
+    public record DuplicateHint(
+            Long id,
+            String title,
+            String difficulty,
+            String difficultyCode,
+            List<String> tags,
+            String externalPlatform,
+            String externalSourceId,
+            String sourceUrl,
+            int score,
+            String reason
+    ) {
+        public static DuplicateHint from(Problem problem, int score, String reason) {
+            DifficultyLevel difficulty = problem.getDifficulty();
+            return new DuplicateHint(
+                    problem.getId(),
+                    problem.getTitle(),
+                    difficulty.label(),
+                    difficulty.name(),
+                    problem.getTags().stream().sorted().toList(),
+                    problem.getExternalPlatform(),
+                    problem.getExternalSourceId(),
+                    problem.getSourceUrl(),
+                    score,
+                    reason
+            );
+        }
+    }
+
     public record ProblemResponse(
             Long id,
             String title,
@@ -35,6 +64,9 @@ public final class ProblemDtos {
             String difficultyCode,
             List<String> tags,
             String source,
+            String externalPlatform,
+            String externalSourceId,
+            String sourceUrl,
             Instant createdAt,
             boolean passed
     ) {
@@ -48,6 +80,9 @@ public final class ProblemDtos {
                     difficulty.name(),
                     problem.getTags().stream().sorted().toList(),
                     problem.getSource(),
+                    problem.getExternalPlatform(),
+                    problem.getExternalSourceId(),
+                    problem.getSourceUrl(),
                     problem.getCreatedAt(),
                     passed
             );

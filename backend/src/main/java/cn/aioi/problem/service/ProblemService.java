@@ -58,8 +58,8 @@ public class ProblemService {
     public ProblemDtos.ProblemResponse create(ProblemDtos.ProblemRequest request, User user) {
         Set<String> tags = sanitizeTags(request.tags(), tagCatalog);
         Problem problem = problems.save(new Problem(
-                request.title().trim(),
-                request.description().trim(),
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.title()),
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.description()),
                 DifficultyLevel.fromLabelOrName(request.difficulty()),
                 tags,
                 blankToNull(request.source()),
@@ -72,8 +72,8 @@ public class ProblemService {
     public ProblemDtos.ProblemResponse update(Long id, ProblemDtos.ProblemRequest request, User user) {
         Problem problem = getProblem(id);
         problem.update(
-                request.title().trim(),
-                request.description().trim(),
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.title()),
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.description()),
                 DifficultyLevel.fromLabelOrName(request.difficulty()),
                 sanitizeTags(request.tags(), tagCatalog),
                 blankToNull(request.source())
@@ -88,6 +88,20 @@ public class ProblemService {
     public ProblemDtos.ProblemResponse get(Long id, User user) {
         Problem problem = getProblem(id);
         return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem));
+    }
+
+    public List<ProblemDtos.DuplicateHint> similar(Long id, User user) {
+        Problem target = getProblem(id);
+        Set<String> targetTitleTokens = titleTokens(target.getTitle());
+        Set<String> targetTags = comparableTags(target.getTags());
+        return problems.findAllWithTags().stream()
+                .filter(problem -> !problem.getId().equals(target.getId()))
+                .map(problem -> duplicateHint(problem, targetTitleTokens, targetTags))
+                .filter(candidate -> candidate.score() > 0)
+                .sorted(Comparator.comparingInt(ProblemDtos.DuplicateHint::score).reversed()
+                        .thenComparing(ProblemDtos.DuplicateHint::title))
+                .limit(6)
+                .toList();
     }
 
     @Transactional
@@ -233,5 +247,43 @@ public class ProblemService {
         int exact = (int) selectedTags.stream().filter(problem.getTags()::contains).count();
         int related = (int) problem.getTags().stream().filter(relatedTags::contains).count();
         return exact * 100 + related * 20;
+    }
+
+    private static ProblemDtos.DuplicateHint duplicateHint(Problem problem, Set<String> targetTitleTokens, Set<String> targetTags) {
+        Set<String> candidateTitleTokens = titleTokens(problem.getTitle());
+        List<String> sharedTitleTokens = candidateTitleTokens.stream()
+                .filter(targetTitleTokens::contains)
+                .sorted()
+                .toList();
+        Set<String> candidateTags = comparableTags(problem.getTags());
+        List<String> sharedTags = candidateTags.stream()
+                .filter(targetTags::contains)
+                .sorted()
+                .toList();
+        int score = sharedTitleTokens.size() * 40 + sharedTags.size() * 30;
+        List<String> reasons = new ArrayList<>();
+        if (!sharedTitleTokens.isEmpty()) {
+            reasons.add("title: " + String.join(", ", sharedTitleTokens));
+        }
+        if (!sharedTags.isEmpty()) {
+            reasons.add("tag: " + String.join(", ", sharedTags));
+        }
+        return ProblemDtos.DuplicateHint.from(problem, score, String.join("; ", reasons));
+    }
+
+    private static Set<String> titleTokens(String title) {
+        if (title == null || title.isBlank()) {
+            return Set.of();
+        }
+        return java.util.Arrays.stream(title.toLowerCase(Locale.ROOT).split("[^\\p{IsAlphabetic}\\p{IsDigit}]+"))
+                .map(String::trim)
+                .filter(token -> token.length() >= 3)
+                .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private static Set<String> comparableTags(Set<String> tags) {
+        return tags.stream()
+                .filter(tag -> !TagCatalogService.NO_TAG.equals(tag))
+                .collect(Collectors.toCollection(LinkedHashSet::new));
     }
 }

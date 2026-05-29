@@ -76,4 +76,55 @@ class AiProviderRouterTest {
 
         assertThat(assessment.reasoningSummary()).isEqualTo("规则模型初判。");
     }
+
+    @Test
+    void routesProblemStatementPolishingThroughConfiguredProvider() {
+        AiSettingsService settingsService = mock(AiSettingsService.class);
+        RuleBasedAiProvider ruleBased = mock(RuleBasedAiProvider.class);
+        DeepSeekAiProvider deepSeek = mock(DeepSeekAiProvider.class);
+        CodexCliAiProvider codexCli = mock(CodexCliAiProvider.class);
+        AiProviderRouter router = new AiProviderRouter(settingsService, ruleBased, deepSeek, codexCli);
+        ProblemInput input = new ProblemInput("OJ", "raw statement");
+        AiRuntimeSettings settings = new AiRuntimeSettings(
+                "codex",
+                "",
+                "https://api.deepseek.com/chat/completions",
+                "deepseek-chat",
+                45,
+                "codex",
+                180
+        );
+        when(settingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS)).thenReturn(settings);
+        when(codexCli.polishProblemStatement(input, settings)).thenReturn("整理后的中文题面");
+
+        String polished = router.polishProblemStatement(input, AiTaskType.PROBLEM_ANALYSIS);
+
+        assertThat(polished).isEqualTo("整理后的中文题面");
+    }
+
+    @Test
+    void problemStatementPolishingFallsBackToRuleBasedCleanup() {
+        AiSettingsService settingsService = mock(AiSettingsService.class);
+        RuleBasedAiProvider ruleBased = mock(RuleBasedAiProvider.class);
+        DeepSeekAiProvider deepSeek = mock(DeepSeekAiProvider.class);
+        CodexCliAiProvider codexCli = mock(CodexCliAiProvider.class);
+        AiProviderRouter router = new AiProviderRouter(settingsService, ruleBased, deepSeek, codexCli);
+        ProblemInput input = new ProblemInput("OJ", "raw statement");
+        AiRuntimeSettings settings = new AiRuntimeSettings(
+                "deepseek",
+                "key",
+                "https://api.deepseek.com/chat/completions",
+                "deepseek-chat",
+                45,
+                "codex",
+                180
+        );
+        when(settingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS)).thenReturn(settings);
+        when(deepSeek.polishProblemStatement(input, settings)).thenThrow(new IllegalStateException("failed"));
+        when(ruleBased.polishProblemStatement(input)).thenReturn("fallback cleanup");
+
+        String polished = router.polishProblemStatement(input, AiTaskType.PROBLEM_ANALYSIS);
+
+        assertThat(polished).isEqualTo("fallback cleanup");
+    }
 }

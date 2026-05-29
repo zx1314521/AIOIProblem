@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed, watchEffect } from 'vue'
 import { RouterLink, RouterView, useRoute, useRouter } from 'vue-router'
-import { BrainCircuit, ClipboardList, History, LogOut, Search, Settings, Sparkles, SquareCheckBig, UploadCloud } from 'lucide-vue-next'
+import { BrainCircuit, ClipboardList, History, LogOut, PlugZap, Search, Settings, Sparkles, SquareCheckBig, UploadCloud } from 'lucide-vue-next'
 import { authState, clearAuth } from './services/auth'
 import { requireAuth } from './routes'
 
 const route = useRoute()
 const router = useRouter()
 const isLogin = computed(() => route.path === '/login')
+const isHome = computed(() => route.path === '/')
 
 watchEffect(() => {
   const target = requireAuth(route.path)
@@ -23,7 +24,8 @@ function logout() {
 </script>
 
 <template>
-  <main v-if="isLogin" class="login-shell">
+  <RouterView v-if="isHome" />
+  <main v-else-if="isLogin" class="login-shell">
     <RouterView />
   </main>
   <main v-else class="app-shell">
@@ -39,6 +41,7 @@ function logout() {
       <nav class="nav-list" aria-label="主导航">
         <RouterLink to="/analysis"><UploadCloud :size="18" />题面分析</RouterLink>
         <RouterLink to="/history"><History :size="18" />历史记录</RouterLink>
+        <RouterLink to="/oj-imports"><PlugZap :size="18" />OJ导入</RouterLink>
         <RouterLink to="/problems"><Search :size="18" />题目管理</RouterLink>
         <RouterLink to="/sets"><ClipboardList :size="18" />题单管理</RouterLink>
         <RouterLink to="/recommendations"><Sparkles :size="18" />AI推荐</RouterLink>

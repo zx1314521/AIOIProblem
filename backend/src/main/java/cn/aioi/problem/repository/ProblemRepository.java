@@ -5,8 +5,11 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface ProblemRepository extends JpaRepository<Problem, Long> {
     @Query("select distinct p from Problem p left join fetch p.tags")
     List<Problem> findAllWithTags();
+
+    Optional<Problem> findByExternalPlatformAndExternalSourceId(String externalPlatform, String externalSourceId);
 }

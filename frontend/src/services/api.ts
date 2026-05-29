@@ -1,5 +1,5 @@
 import { authState, clearAuth } from './auth'
-import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, Problem, ProblemSet, RecommendationResponse, TagCatalog } from '../types'
+import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, DuplicateHint, OjImportHistoryJob, Problem, ProblemSet, RecommendationResponse, TagCatalog } from '../types'
 
 async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
   const headers = new Headers(options.headers)
@@ -10,7 +10,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     headers.set('Authorization', `Bearer ${authState.token}`)
   }
   const response = await fetch(path, { ...options, headers })
-  if (response.status === 401 || response.status === 403) {
+  if (response.status === 401) {
     clearAuth()
   }
   if (!response.ok) {
@@ -47,6 +47,7 @@ export const api = {
   searchProblems: (params: URLSearchParams) => request<Problem[]>(`/api/problems?${params.toString()}`),
   getTags: () => request<TagCatalog>('/api/tags'),
   getProblem: (id: number) => request<Problem>(`/api/problems/${id}`),
+  listSimilarProblems: (id: number) => request<DuplicateHint[]>(`/api/problems/${id}/similar`),
   createProblem: (problem: { title: string; description: string; difficulty: string; tags: string[]; source?: string }) =>
     request<Problem>('/api/problems', { method: 'POST', body: JSON.stringify(problem) }),
   updateProblem: (id: number, problem: { title: string; description: string; difficulty: string; tags: string[]; source?: string }) =>
@@ -91,5 +92,6 @@ export const api = {
   deleteBatchItem: (jobId: number, itemId: number) =>
     request<BatchJobDetail>(`/api/batch-jobs/${jobId}/items/${itemId}`, { method: 'DELETE' }),
   reorderBatchItems: (jobId: number, itemIds: number[]) =>
-    request<BatchJobDetail>(`/api/batch-jobs/${jobId}/items/reorder`, { method: 'POST', body: JSON.stringify({ itemIds }) })
+    request<BatchJobDetail>(`/api/batch-jobs/${jobId}/items/reorder`, { method: 'POST', body: JSON.stringify({ itemIds }) }),
+  listOjImportHistory: () => request<OjImportHistoryJob[]>('/api/oj-imports/history')
 }

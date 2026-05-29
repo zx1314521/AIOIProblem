@@ -144,6 +144,32 @@ class AuthAndProblemIntegrationTest {
     }
 
     @Test
+    void normalizesWowoNameWhenCreatingProblems() {
+        AuthDtos.AuthResponse auth = register("wowo-normalizer");
+        HttpHeaders headers = bearer(auth.token());
+
+        ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
+                "\u8717\u8717 的训练题",
+                "请帮助 \u8717\u8717 输出答案。",
+                "简单",
+                Set.of("模拟"),
+                "manual"
+        );
+
+        ResponseEntity<ProblemDtos.ProblemResponse> created = rest.exchange(
+                "/api/problems",
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                ProblemDtos.ProblemResponse.class
+        );
+
+        assertThat(created.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(created.getBody()).isNotNull();
+        assertThat(created.getBody().title()).isEqualTo("BOB 的训练题");
+        assertThat(created.getBody().description()).isEqualTo("请帮助 BOB 输出答案。");
+    }
+
+    @Test
     void multiTagSearchRanksExactMatchesBeforePartialAndRelatedResults() {
         AuthDtos.AuthResponse auth = register("carol");
         HttpHeaders headers = bearer(auth.token());
@@ -163,6 +189,30 @@ class AuthAndProblemIntegrationTest {
         assertThat(searched.getBody()).isNotNull();
         assertThat(java.util.Arrays.stream(searched.getBody()).map(ProblemDtos.ProblemResponse::title).toList())
                 .containsExactly("多标签排序 A", "多标签排序 B", "多标签排序 C", "多标签排序 D");
+    }
+
+    @Test
+    void listsSimilarProblemHintsForMergeReview() {
+        AuthDtos.AuthResponse auth = register("merge-review");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemDtos.ProblemResponse target = createProblem(headers, "CF2229D Median Splits", Set.of());
+        ProblemDtos.ProblemResponse sameTopic = createProblem(headers, "Median Splits practice", Set.of());
+        createProblem(headers, "Unrelated Graph", Set.of());
+
+        ResponseEntity<ProblemDtos.DuplicateHint[]> hints = rest.exchange(
+                "/api/problems/" + target.id() + "/similar",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                ProblemDtos.DuplicateHint[].class
+        );
+
+        assertThat(hints.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(hints.getBody()).isNotNull();
+        assertThat(hints.getBody()).extracting(ProblemDtos.DuplicateHint::id)
+                .contains(sameTopic.id())
+                .doesNotContain(target.id());
+        assertThat(hints.getBody()[0].score()).isGreaterThan(0);
+        assertThat(hints.getBody()[0].reason()).contains("title");
     }
 
     @Test

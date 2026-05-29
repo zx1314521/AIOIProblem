@@ -32,7 +32,9 @@ public class AnalysisService {
             throw new IllegalArgumentException("题面不能为空");
         }
         String safeTitle = title == null || title.isBlank() ? "未命名题目" : title.trim();
-        AiAssessment assessment = aiProvider.assess(new ProblemInput(safeTitle, text.trim()), AiTaskType.PROBLEM_ANALYSIS);
+        safeTitle = ProblemTextNormalizer.normalizeNamesAndTrim(safeTitle);
+        ProblemInput rawInput = new ProblemInput(safeTitle, ProblemTextNormalizer.normalizeNamesAndTrim(text));
+        AiAssessment assessment = aiProvider.assess(contentForAnalysis(rawInput), AiTaskType.PROBLEM_ANALYSIS);
         return toResponse(assessment);
     }
 
@@ -62,6 +64,18 @@ public class AnalysisService {
                 assessment.reasoningSummary(),
                 similarProblems(assessment.tags())
         );
+    }
+
+    private ProblemInput contentForAnalysis(ProblemInput rawInput) {
+        try {
+            String polished = aiProvider.polishProblemStatement(rawInput, AiTaskType.PROBLEM_ANALYSIS);
+            if (polished == null || polished.isBlank()) {
+                return rawInput;
+            }
+            return new ProblemInput(rawInput.title(), ProblemTextNormalizer.normalizeNamesAndTrim(polished));
+        } catch (RuntimeException exception) {
+            return rawInput;
+        }
     }
 
     private List<String> normalizedHints(List<String> hints) {

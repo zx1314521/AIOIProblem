@@ -10,15 +10,19 @@ import cn.aioi.problem.domain.BatchItemStatus;
 import cn.aioi.problem.domain.BatchJob;
 import cn.aioi.problem.domain.BatchJobItem;
 import cn.aioi.problem.domain.BatchJobStatus;
+import cn.aioi.problem.domain.PassedProblem;
 import cn.aioi.problem.domain.Problem;
 import cn.aioi.problem.domain.User;
 import cn.aioi.problem.repository.BatchJobItemRepository;
 import cn.aioi.problem.repository.BatchJobRepository;
+import cn.aioi.problem.repository.PassedProblemRepository;
 import cn.aioi.problem.repository.ProblemRepository;
 import cn.aioi.problem.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
 import jakarta.annotation.PreDestroy;
 import jakarta.persistence.EntityNotFoundException;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.annotation.Transactional;
@@ -39,9 +43,11 @@ import java.util.concurrent.atomic.AtomicBoolean;
 
 @Service
 public class BatchJobService {
+    private static final Logger log = LoggerFactory.getLogger(BatchJobService.class);
     private final BatchJobRepository jobs;
     private final BatchJobItemRepository items;
     private final ProblemRepository problems;
+    private final PassedProblemRepository passedProblems;
     private final UserRepository users;
     private final AiProvider aiProvider;
     private final AiSettingsService aiSettingsService;
@@ -51,12 +57,14 @@ public class BatchJobService {
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
 
     public BatchJobService(BatchJobRepository jobs, BatchJobItemRepository items, ProblemRepository problems,
-                           UserRepository users, AiProvider aiProvider, AiSettingsService aiSettingsService,
+                           PassedProblemRepository passedProblems, UserRepository users,
+                           AiProvider aiProvider, AiSettingsService aiSettingsService,
                            TagCatalogService tagCatalog,
                            PlatformTransactionManager transactionManager) {
         this.jobs = jobs;
         this.items = items;
         this.problems = problems;
+        this.passedProblems = passedProblems;
         this.users = users;
         this.aiProvider = aiProvider;
         this.aiSettingsService = aiSettingsService;
@@ -86,7 +94,12 @@ public class BatchJobService {
             if (!isTextProblemFile(filename)) {
                 throw new IllegalArgumentException("仅支持 .txt 或 .md 文件：" + filename);
             }
-            items.save(new BatchJobItem(job, titleFromFilename(filename), readUtf8(file), (int) items.countByJobAndStatus(job, BatchItemStatus.PENDING)));
+            items.save(new BatchJobItem(
+                    job,
+                    ProblemTextNormalizer.normalizeNamesAndTrim(titleFromFilename(filename)),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(readUtf8(file)),
+                    (int) items.countByJobAndStatus(job, BatchItemStatus.PENDING)
+            ));
         }
         triggerWorkerAfterCommit();
         return detail(job.getId(), user);
@@ -129,7 +142,10 @@ public class BatchJobService {
     public BatchDtos.BatchItemResponse updateItem(Long jobId, Long itemId, BatchDtos.BatchItemUpdateRequest request, User user) {
         BatchJob job = ownedJob(jobId, user);
         BatchJobItem item = ownedItem(job, itemId);
-        item.updatePending(request.title().trim(), request.content().trim());
+        item.updatePending(
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.title()),
+                ProblemTextNormalizer.normalizeNamesAndTrim(request.content())
+        );
         return toItemResponse(item);
     }
 
@@ -164,10 +180,16 @@ public class BatchJobService {
     public void triggerWorker() {
         if (workerRunning.compareAndSet(false, true)) {
             executor.submit(this::workerLoop);
+        } else {
+            executor.submit(() -> {
+                if (workerRunning.compareAndSet(false, true)) {
+                    workerLoop();
+                }
+            });
         }
     }
 
-    private void triggerWorkerAfterCommit() {
+    public void triggerWorkerAfterCommit() {
         if (TransactionSynchronizationManager.isSynchronizationActive()) {
             TransactionSynchronizationManager.registerSynchronization(new TransactionSynchronization() {
                 @Override
@@ -189,6 +211,8 @@ public class BatchJobService {
                 }
                 processItem(nextItemId.get());
             }
+        } catch (RuntimeException exception) {
+            log.error("Batch worker stopped unexpectedly", exception);
         } finally {
             workerRunning.set(false);
             Boolean hasMore = transactionTemplate.execute(status -> jobs.findByStatusOrderByCreatedAtAsc(BatchJobStatus.RUNNING).stream()
@@ -216,7 +240,17 @@ public class BatchJobService {
     private void processItem(Long itemId) {
         WorkItem workItem = transactionTemplate.execute(status -> {
             BatchJobItem item = items.findById(itemId).orElseThrow();
-            return new WorkItem(item.getId(), item.getJob().getId(), item.getJob().getOwner().getId(), item.getTitle(), item.getContent());
+            return new WorkItem(
+                    item.getId(),
+                    item.getJob().getId(),
+                    item.getJob().getOwner().getId(),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(item.getTitle()),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(item.getContent()),
+                    item.getExternalPlatform(),
+                    item.getExternalSourceId(),
+                    item.getSourceUrl(),
+                    item.isMarkPassedAfterImport()
+            );
         });
         if (workItem == null) {
             return;
@@ -224,19 +258,32 @@ public class BatchJobService {
         AiRuntimeSettings runtime = aiSettingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS);
         long started = System.nanoTime();
         try {
-            AiAssessment assessment = aiProvider.assess(new ProblemInput(workItem.title(), workItem.content()), AiTaskType.PROBLEM_ANALYSIS);
+            if (completeExistingExternalImport(workItem)) {
+                return;
+            }
+            String content = contentForAnalysis(workItem);
+            AiAssessment assessment = aiProvider.assess(new ProblemInput(workItem.title(), content), AiTaskType.PROBLEM_ANALYSIS);
             long durationMs = elapsedMs(started);
             transactionTemplate.executeWithoutResult(status -> {
                 BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
                 User owner = users.getReferenceById(workItem.ownerId());
-                Problem problem = problems.save(new Problem(
-                        workItem.title(),
-                        workItem.content(),
-                        assessment.difficulty(),
-                        ProblemService.sanitizeAiTags(assessment.tags(), tagCatalog),
-                        "批量导入",
-                        owner
-                ));
+                Problem problem = existingExternalProblem(workItem);
+                boolean created = false;
+                if (problem == null) {
+                    problem = problems.save(new Problem(
+                            ProblemTextNormalizer.normalizeNamesAndTrim(workItem.title()),
+                            content,
+                            assessment.difficulty(),
+                            ProblemService.sanitizeAiTags(assessment.tags(), tagCatalog),
+                            sourceLabel(workItem),
+                            owner,
+                            workItem.externalPlatform(),
+                            workItem.externalSourceId(),
+                            workItem.sourceUrl()
+                    ));
+                    created = true;
+                }
+                markPassedIfNeeded(problem, owner, workItem.markPassedAfterImport(), created);
                 item.completeAnalysisMetadata(
                         providerLabel(runtime, assessment),
                         modelLabel(runtime, assessment),
@@ -260,12 +307,81 @@ public class BatchJobService {
         }
     }
 
+    private boolean completeExistingExternalImport(WorkItem workItem) {
+        if (workItem.externalPlatform() == null || workItem.externalSourceId() == null) {
+            return false;
+        }
+        return Boolean.TRUE.equals(transactionTemplate.execute(status -> {
+            Problem problem = existingExternalProblem(workItem);
+            if (problem == null) {
+                return false;
+            }
+            BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
+            User owner = users.getReferenceById(workItem.ownerId());
+            markPassedIfNeeded(problem, owner, workItem.markPassedAfterImport(), false);
+            item.completeAnalysisMetadata(
+                    "OJ import",
+                    "existing problem",
+                    1.0,
+                    "同源题已存在，跳过 AI 分析。",
+                    "[]",
+                    0
+            );
+            item.succeed(problem.getId());
+            item.getJob().incrementSuccess();
+            completeJobIfDone(item.getJob());
+            return true;
+        }));
+    }
+
     private void completeJobIfDone(BatchJob job) {
         long pending = items.countByJobAndStatus(job, BatchItemStatus.PENDING);
         long running = items.countByJobAndStatus(job, BatchItemStatus.RUNNING);
         if (pending == 0 && running == 0 && job.getStatus() == BatchJobStatus.RUNNING) {
             job.complete();
         }
+    }
+
+    private Problem existingExternalProblem(WorkItem workItem) {
+        if (workItem.externalPlatform() == null || workItem.externalSourceId() == null) {
+            return null;
+        }
+        return problems.findByExternalPlatformAndExternalSourceId(workItem.externalPlatform(), workItem.externalSourceId())
+                .orElse(null);
+    }
+
+    private String contentForAnalysis(WorkItem workItem) {
+        try {
+            String polished = aiProvider.polishProblemStatement(new ProblemInput(workItem.title(), workItem.content()), AiTaskType.PROBLEM_ANALYSIS);
+            return polished == null || polished.isBlank()
+                    ? ProblemTextNormalizer.normalizeNamesAndTrim(workItem.content())
+                    : ProblemTextNormalizer.normalizeNamesAndTrim(polished);
+        } catch (RuntimeException exception) {
+            return ProblemTextNormalizer.normalizeNamesAndTrim(workItem.content());
+        }
+    }
+
+    private void markPassedIfNeeded(Problem problem, User owner, boolean markPassed, boolean created) {
+        if (markPassed && (created || !passedProblems.existsByUserAndProblem(owner, problem))) {
+            passedProblems.save(new PassedProblem(owner, problem));
+        }
+    }
+
+    private String sourceLabel(WorkItem workItem) {
+        if (workItem.externalPlatform() == null || workItem.externalSourceId() == null) {
+            return "批量导入";
+        }
+        return platformLabel(workItem.externalPlatform()) + ": " + workItem.externalSourceId();
+    }
+
+    private String platformLabel(String platform) {
+        return switch (platform) {
+            case "CODEFORCES" -> "Codeforces";
+            case "ATCODER" -> "AtCoder";
+            case "LUOGU" -> "洛谷";
+            case "NOWCODER" -> "牛客";
+            default -> platform;
+        };
     }
 
     private BatchJob ownedJob(Long id, User user) {
@@ -407,6 +523,8 @@ public class BatchJobService {
         executor.shutdownNow();
     }
 
-    private record WorkItem(Long itemId, Long jobId, Long ownerId, String title, String content) {
+    private record WorkItem(Long itemId, Long jobId, Long ownerId, String title, String content,
+                            String externalPlatform, String externalSourceId, String sourceUrl,
+                            boolean markPassedAfterImport) {
     }
 }
