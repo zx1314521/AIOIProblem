@@ -1,0 +1,52 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>AIOI OJ Import</title>
+  </head>
+  <body>
+    <main class="shell">
+      <header>
+        <div>
+          <p class="eyebrow">AIOIProblem</p>
+          <h1>OJ Import</h1>
+        </div>
+        <span id="account" class="account">未绑定</span>
+      </header>
+
+      <section class="panel">
+        <label>
+          后端地址
+          <input id="baseUrl" type="url" value="http://localhost:8080" />
+        </label>
+        <label>
+          前端地址
+          <input id="appUrl" type="url" value="http://localhost:5173" />
+        </label>
+        <div class="grid">
+          <label>
+            用户名
+            <input id="username" autocomplete="username" />
+          </label>
+          <label>
+            密码
+            <input id="password" type="password" autocomplete="current-password" />
+          </label>
+        </div>
+        <button id="login" type="button">绑定账号</button>
+      </section>
+
+      <section class="panel">
+        <button id="scan" class="primary" type="button">扫描当前页并导入</button>
+        <div id="status" class="status">支持 Codeforces、AtCoder、洛谷、牛客。</div>
+        <div id="quickLinks" class="quick-links" hidden>
+          <button id="openOjHistory" type="button">查看导入记录</button>
+          <button id="openProblems" type="button">打开题库</button>
+        </div>
+        <ul id="results" class="results"></ul>
+      </section>
+    </main>
+    <script type="module" src="/src/popup/popup.ts"></script>
+  </body>
+</html>

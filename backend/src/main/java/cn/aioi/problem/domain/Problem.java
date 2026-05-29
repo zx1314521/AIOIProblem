@@ -14,13 +14,14 @@ import jakarta.persistence.JoinColumn;
 import jakarta.persistence.ManyToOne;
 import jakarta.persistence.PrePersist;
 import jakarta.persistence.Table;
+import jakarta.persistence.UniqueConstraint;
 
 import java.time.Instant;
 import java.util.LinkedHashSet;
 import java.util.Set;
 
 @Entity
-@Table(name = "problems")
+@Table(name = "problems", uniqueConstraints = @UniqueConstraint(columnNames = {"external_platform", "external_source_id"}))
 public class Problem {
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -43,6 +44,15 @@ public class Problem {
 
     private String source;
 
+    @Column(length = 32)
+    private String externalPlatform;
+
+    @Column(length = 80)
+    private String externalSourceId;
+
+    @Column(length = 512)
+    private String sourceUrl;
+
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by")
     private User createdBy;
@@ -54,12 +64,20 @@ public class Problem {
     }
 
     public Problem(String title, String description, DifficultyLevel difficulty, Set<String> tags, String source, User createdBy) {
+        this(title, description, difficulty, tags, source, createdBy, null, null, null);
+    }
+
+    public Problem(String title, String description, DifficultyLevel difficulty, Set<String> tags, String source,
+                   User createdBy, String externalPlatform, String externalSourceId, String sourceUrl) {
         this.title = title;
         this.description = description;
         this.difficulty = difficulty;
         this.tags = new LinkedHashSet<>(tags);
         this.source = source;
         this.createdBy = createdBy;
+        this.externalPlatform = externalPlatform;
+        this.externalSourceId = externalSourceId;
+        this.sourceUrl = sourceUrl;
     }
 
     public void update(String title, String description, DifficultyLevel difficulty, Set<String> tags, String source) {
@@ -99,6 +117,18 @@ public class Problem {
 
     public String getSource() {
         return source;
+    }
+
+    public String getExternalPlatform() {
+        return externalPlatform;
+    }
+
+    public String getExternalSourceId() {
+        return externalSourceId;
+    }
+
+    public String getSourceUrl() {
+        return sourceUrl;
     }
 
     public User getCreatedBy() {

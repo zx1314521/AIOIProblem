@@ -12,6 +12,8 @@ backend/.mvn/wrapper/maven-wrapper.jar
 frontend/node_modules/
 frontend/dist/
 frontend/.vite/
+extension/node_modules/
+extension/dist/
 
 # Environment
 .env
@@ -20,4 +22,3 @@ frontend/.vite/
 
 # Logs
 *.log
-

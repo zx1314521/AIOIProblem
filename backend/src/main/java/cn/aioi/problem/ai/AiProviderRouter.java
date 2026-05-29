@@ -45,4 +45,18 @@ public class AiProviderRouter implements AiProvider {
             );
         }
     }
+
+    @Override
+    public String polishProblemStatement(ProblemInput input, AiTaskType taskType) {
+        AiRuntimeSettings settings = settingsService.runtimeSettings(taskType);
+        try {
+            return switch (settings.provider()) {
+                case "deepseek" -> deepSeek.polishProblemStatement(input, settings);
+                case "codex" -> codexCli.polishProblemStatement(input, settings);
+                default -> ruleBased.polishProblemStatement(input);
+            };
+        } catch (RuntimeException exception) {
+            return ruleBased.polishProblemStatement(input);
+        }
+    }
 }

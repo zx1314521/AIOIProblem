@@ -59,6 +59,20 @@ public class RuleBasedAiProvider implements AiProvider {
         return new AiAssessment(difficulty, 0.58 + Math.min(score, 5) * 0.06, tags, hints, "规则模型根据关键词、数据范围和算法标签给出初判。");
     }
 
+    public String polishProblemStatement(ProblemInput input) {
+        String text = input.text() == null ? "" : input.text();
+        return text
+                .replaceAll("(?is)<script.*?</script>", " ")
+                .replaceAll("(?is)<style.*?</style>", " ")
+                .replaceAll("(?is)<[^>]+>", " ")
+                .replace('\u00a0', ' ')
+                .replaceAll("[ \\t]{2,}", " ")
+                .replaceAll("\\s*\\n\\s*", "\n")
+                .replaceAll("\\n{3,}", "\n\n")
+                .replaceAll("(?im)^\\s*(input|output|sample input|sample output)\\s*$", "\n$1")
+                .trim();
+    }
+
     private boolean tagIf(String text, List<String> tags, String tag, String... keywords) {
         for (String keyword : keywords) {
             if (text.contains(keyword.toLowerCase(Locale.ROOT))) {

@@ -22,6 +22,9 @@ public interface BatchJobItemRepository extends JpaRepository<BatchJobItem, Long
 
     long countByJobAndStatus(BatchJob job, BatchItemStatus status);
 
+    boolean existsByExternalPlatformAndExternalSourceIdAndStatusIn(String externalPlatform, String externalSourceId,
+                                                                   List<BatchItemStatus> statuses);
+
     @Modifying
     @Query("update BatchJobItem item set item.problemId = null where item.problemId = :problemId")
     void clearProblemReference(@Param("problemId") Long problemId);

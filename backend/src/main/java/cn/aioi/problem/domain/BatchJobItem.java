@@ -66,6 +66,18 @@ public class BatchJobItem {
 
     private Long aiDurationMs;
 
+    @Column(length = 32)
+    private String externalPlatform;
+
+    @Column(length = 80)
+    private String externalSourceId;
+
+    @Column(length = 512)
+    private String sourceUrl;
+
+    @Column(nullable = false)
+    private boolean markPassedAfterImport;
+
     protected BatchJobItem() {
     }
 
@@ -79,6 +91,17 @@ public class BatchJobItem {
         this.content = content;
         this.status = BatchItemStatus.PENDING;
         this.sortOrder = sortOrder;
+    }
+
+    public static BatchJobItem ojImport(BatchJob job, String title, String content, int sortOrder,
+                                        String externalPlatform, String externalSourceId, String sourceUrl,
+                                        boolean markPassedAfterImport) {
+        BatchJobItem item = new BatchJobItem(job, title, content, sortOrder);
+        item.externalPlatform = externalPlatform;
+        item.externalSourceId = externalSourceId;
+        item.sourceUrl = sourceUrl;
+        item.markPassedAfterImport = markPassedAfterImport;
+        return item;
     }
 
     @PrePersist
@@ -205,5 +228,21 @@ public class BatchJobItem {
 
     public Long getAiDurationMs() {
         return aiDurationMs;
+    }
+
+    public String getExternalPlatform() {
+        return externalPlatform;
+    }
+
+    public String getExternalSourceId() {
+        return externalSourceId;
+    }
+
+    public String getSourceUrl() {
+        return sourceUrl;
+    }
+
+    public boolean isMarkPassedAfterImport() {
+        return markPassedAfterImport;
     }
 }

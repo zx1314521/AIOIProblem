@@ -18,6 +18,9 @@ export interface Problem {
   difficultyCode: DifficultyCode
   tags: string[]
   source?: string
+  externalPlatform?: string
+  externalSourceId?: string
+  sourceUrl?: string
   createdAt: string
   passed: boolean
 }
@@ -37,6 +40,19 @@ export interface SimilarProblem {
   title: string
   difficulty: string
   tags: string[]
+  reason: string
+}
+
+export interface DuplicateHint {
+  id: number
+  title: string
+  difficulty: string
+  difficultyCode: DifficultyCode
+  tags: string[]
+  externalPlatform?: string
+  externalSourceId?: string
+  sourceUrl?: string
+  score: number
   reason: string
 }
 
@@ -117,4 +133,27 @@ export interface BatchItem {
 export interface BatchJobDetail {
   job: BatchJob
   items: BatchItem[]
+}
+
+export interface OjImportHistoryItem {
+  id: number
+  platform: 'CODEFORCES' | 'ATCODER' | 'LUOGU' | 'NOWCODER' | string
+  sourceId: string
+  title: string
+  status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
+  problemId?: number
+  sourceUrl: string
+  originalStatement: string
+  passedRequested: boolean
+  errorMessage?: string
+  createdAt: string
+  startedAt?: string
+  finishedAt?: string
+  aiProvider?: string
+  aiModel?: string
+  aiDurationMs?: number
+}
+
+export interface OjImportHistoryJob extends BatchJob {
+  items: OjImportHistoryItem[]
 }

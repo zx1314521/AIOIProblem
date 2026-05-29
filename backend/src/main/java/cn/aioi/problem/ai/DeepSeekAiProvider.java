@@ -1,6 +1,8 @@
 package cn.aioi.problem.ai;
 
 import cn.aioi.problem.service.TagCatalogService;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
@@ -15,32 +17,54 @@ public class DeepSeekAiProvider {
     private final AiProperties properties;
     private final AiAssessmentParser parser;
     private final TagCatalogService tagCatalog;
+    private final ObjectMapper objectMapper;
 
-    public DeepSeekAiProvider(AiProperties properties, AiAssessmentParser parser, TagCatalogService tagCatalog) {
+    public DeepSeekAiProvider(AiProperties properties, AiAssessmentParser parser, TagCatalogService tagCatalog, ObjectMapper objectMapper) {
         this.properties = properties;
         this.parser = parser;
         this.tagCatalog = tagCatalog;
+        this.objectMapper = objectMapper;
     }
 
     public AiAssessment assess(ProblemInput input) {
         AiProperties.DeepSeek deepseek = properties.deepseek();
         if (deepseek == null) {
-            throw new IllegalStateException("DeepSeek 配置缺失");
+            throw new IllegalStateException("DeepSeek settings are missing");
         }
         if (deepseek.apiKey() == null || deepseek.apiKey().isBlank()) {
-            throw new IllegalStateException("DeepSeek API Key 未配置");
+            throw new IllegalStateException("DeepSeek API key is not configured");
         }
         return call(input, deepseek.baseUrl(), deepseek.apiKey(), deepseek.model(), deepseek.timeoutSeconds());
     }
 
     public AiAssessment assess(ProblemInput input, AiRuntimeSettings settings) {
         if (settings.deepSeekApiKey() == null || settings.deepSeekApiKey().isBlank()) {
-            throw new IllegalStateException("DeepSeek API Key 未配置");
+            throw new IllegalStateException("DeepSeek API key is not configured");
         }
         return call(input, settings.deepSeekBaseUrl(), settings.deepSeekApiKey(), settings.deepSeekModel(), settings.deepSeekTimeoutSeconds());
     }
 
+    public String polishProblemStatement(ProblemInput input, AiRuntimeSettings settings) {
+        if (settings.deepSeekApiKey() == null || settings.deepSeekApiKey().isBlank()) {
+            throw new IllegalStateException("DeepSeek API key is not configured");
+        }
+        String response = callText(
+                settings.deepSeekBaseUrl(),
+                settings.deepSeekApiKey(),
+                settings.deepSeekModel(),
+                settings.deepSeekTimeoutSeconds(),
+                polishSystemPrompt(),
+                input.title() + "\n\n" + input.text()
+        );
+        return extractMessageContent(response).trim();
+    }
+
     private AiAssessment call(ProblemInput input, String baseUrl, String apiKey, String model, int timeoutSeconds) {
+        String response = callText(baseUrl, apiKey, model, timeoutSeconds, systemPrompt(), input.title() + "\n\n" + input.text());
+        return parser.parse(response == null ? "{}" : response);
+    }
+
+    private String callText(String baseUrl, String apiKey, String model, int timeoutSeconds, String systemPrompt, String userPrompt) {
         SimpleClientHttpRequestFactory requestFactory = new SimpleClientHttpRequestFactory();
         requestFactory.setConnectTimeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)));
         requestFactory.setReadTimeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)));
@@ -51,8 +75,8 @@ public class DeepSeekAiProvider {
         Map<String, Object> body = Map.of(
                 "model", model,
                 "messages", List.of(
-                        Map.of("role", "system", "content", systemPrompt()),
-                        Map.of("role", "user", "content", input.title() + "\n\n" + input.text())
+                        Map.of("role", "system", "content", systemPrompt),
+                        Map.of("role", "user", "content", userPrompt)
                 ),
                 "temperature", 0.2
         );
@@ -62,15 +86,36 @@ public class DeepSeekAiProvider {
                 .body(body)
                 .retrieve()
                 .body(String.class);
-        return parser.parse(response == null ? "{}" : response);
+        return response == null ? "" : response;
     }
 
     private String systemPrompt() {
         return """
-                你是信息学竞赛题目分析器。只输出 JSON，不要 Markdown。
-                字段：difficulty, confidence, tags, hints, reasoningSummary。
-                difficulty 必须是：入门、简单、CSPJ中等、CSPS提高、NOIP困难、地狱NOI。
-                hints 是由浅入深的 3 条短提示。
+                You are a competitive programming problem analyzer. Output JSON only, without Markdown.
+                Required fields: difficulty, confidence, tags, hints, reasoningSummary.
+                difficulty must be one of: ENTRY, EASY, CSPJ_MEDIUM, CSPS_ADVANCED, NOIP_HARD, NOI_HELL.
+                hints should contain three short hints ordered from shallow to deep.
+                Prefer tags from this catalog:
                 """ + "\n" + tagCatalog.promptText();
+    }
+
+    private String polishSystemPrompt() {
+        return """
+                You translate and clean competitive programming problem statements.
+                Output only the polished Chinese statement body, without explanations, Markdown code fences, or JSON.
+                Preserve meaning, input/output format, samples, constraints, math symbols, and variable names.
+                Remove web navigation, buttons, ads, duplicated blank lines, and irrelevant page status text.
+                If the original text is already Chinese, only improve formatting and remove noise.
+                """;
+    }
+
+    private String extractMessageContent(String response) {
+        try {
+            JsonNode root = objectMapper.readTree(response == null ? "{}" : response);
+            JsonNode content = root.path("choices").path(0).path("message").path("content");
+            return content.isTextual() ? content.asText() : response;
+        } catch (Exception ignored) {
+            return response == null ? "" : response;
+        }
     }
 }

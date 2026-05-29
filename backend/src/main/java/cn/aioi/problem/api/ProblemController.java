@@ -48,6 +48,11 @@ public class ProblemController {
         return problemService.get(id, principal.user());
     }
 
+    @GetMapping("/{id}/similar")
+    List<ProblemDtos.DuplicateHint> similar(@PathVariable Long id, @AuthenticationPrincipal UserPrincipal principal) {
+        return problemService.similar(id, principal.user());
+    }
+
     @PutMapping("/{id}")
     ProblemDtos.ProblemResponse update(@PathVariable Long id,
                                        @Valid @RequestBody ProblemDtos.ProblemRequest request,

@@ -1,13 +1,15 @@
 import { createApp } from 'vue'
-import { createRouter, createWebHistory } from 'vue-router'
+import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import { routes } from './routes'
+import { consumeExtensionAuthFromLocation } from './services/extensionAuth'
 import './styles.css'
 
+consumeExtensionAuthFromLocation()
+
 const router = createRouter({
-  history: createWebHistory(),
+  history: createWebHashHistory(),
   routes
 })
 
 createApp(App).use(router).mount('#app')
-

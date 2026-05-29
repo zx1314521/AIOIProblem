@@ -1,0 +1,20 @@
+{
+  "name": "aioi-oj-import-extension",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "tsc --noEmit && vite build",
+    "pack:frontend": "npm run build && powershell -NoProfile -ExecutionPolicy Bypass -Command \"Compress-Archive -Path dist/* -DestinationPath ../frontend/public/downloads/aioi-oj-import-extension.zip -Force\"",
+    "test": "vitest run"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "@types/chrome": "^0.0.287",
+    "@types/node": "^22.10.2",
+    "jsdom": "^25.0.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.3",
+    "vitest": "^2.1.8"
+  }
+}
