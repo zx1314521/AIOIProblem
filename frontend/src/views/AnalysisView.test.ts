@@ -102,6 +102,31 @@ const mixedJob: BatchJobDetail = {
   ]
 }
 
+const completedArchiveJob: BatchJobDetail = {
+  job: {
+    id: 3,
+    name: 'Previous import',
+    status: 'COMPLETED',
+    totalCount: 1,
+    successCount: 1,
+    failedCount: 0,
+    pendingCount: 0,
+    runningCount: 0,
+    createdAt: '2026-05-23T00:00:00'
+  },
+  items: [
+    {
+      id: 31,
+      title: 'Old visible problem',
+      content: '# Old visible problem',
+      status: 'SUCCEEDED',
+      sortOrder: 0,
+      tags: ['dp'],
+      createdAt: '2026-05-23T00:00:00'
+    }
+  ]
+}
+
 beforeEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
@@ -161,6 +186,23 @@ test('filters batch items by status and keeps the selected filter after polling'
   expect(screen.getByRole('button', { name: /失败 1/ }).getAttribute('aria-pressed')).toBe('true')
   expect(within(queue).getByRole('button', { name: /Failed problem/ })).toBeTruthy()
   vi.useRealTimers()
+})
+
+test('shows items from older import batches in the same task rail', async () => {
+  vi.mocked(api.listBatchJobs).mockResolvedValue([mixedJob.job, completedArchiveJob.job])
+  vi.mocked(api.getBatchJob).mockImplementation(async (id: number) => {
+    if (id === mixedJob.job.id) return mixedJob
+    if (id === completedArchiveJob.job.id) return completedArchiveJob
+    throw new Error('missing job')
+  })
+
+  render(AnalysisView)
+
+  await screen.findByRole('button', { name: /Pending problem/ })
+  const queue = screen.getByLabelText('任务题目列表')
+  expect(within(queue).getByRole('button', { name: /Pending problem/ })).toBeTruthy()
+  expect(within(queue).getByRole('button', { name: /Old visible problem/ })).toBeTruthy()
+  expect(screen.getByRole('button', { name: /全部 6/ })).toBeTruthy()
 })
 
 test('keeps the selected completed job visible after polling', async () => {

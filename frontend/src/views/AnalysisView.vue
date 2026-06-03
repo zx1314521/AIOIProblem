@@ -10,6 +10,11 @@ import { normalizeProblemMath } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 type BatchStatusFilter = 'ALL' | BatchItem['status']
+type QueueEntry = BatchItem & {
+  jobId: number
+  jobName: string
+  jobCreatedAt: string
+}
 
 const title = ref('')
 const text = ref('')
@@ -18,8 +23,9 @@ const loading = ref(false)
 const error = ref('')
 
 const jobs = ref<BatchJob[]>([])
+const jobDetails = ref<BatchJobDetail[]>([])
 const selected = ref<BatchJobDetail | null>(null)
-const selectedItem = ref<BatchItem | null>(null)
+const selectedItem = ref<QueueEntry | null>(null)
 const batchFiles = ref<File[]>([])
 const batchName = ref('批量题面分析')
 const batchError = ref('')
@@ -32,8 +38,12 @@ const statusFilter = ref<BatchStatusFilter>('ALL')
 const expandedErrorItemIds = ref<Set<number>>(new Set())
 let timer: number | undefined
 
-const selectedJob = computed(() => selected.value?.job)
-const queueItems = computed(() => selected.value?.items ?? [])
+const queueItems = computed(() => jobDetails.value
+  .flatMap(detail => detail.items.map(item => withJobMeta(item, detail)))
+  .sort((a, b) => {
+    const created = new Date(b.jobCreatedAt).getTime() - new Date(a.jobCreatedAt).getTime()
+    return created || a.sortOrder - b.sortOrder || a.id - b.id
+  }))
 const filteredQueueItems = computed(() => queueItems.value.filter(item => matchesStatusFilter(item, statusFilter.value)))
 const statusFilterOptions = computed(() => [
   { value: 'ALL' as const, label: '全部', count: queueItems.value.length },
@@ -58,6 +68,8 @@ async function analyzeText() {
     const problemTitle = title.value.trim() || (fileName.value ? titleFromFilename(fileName.value) : '未命名题目')
     const file = new File([content], `${filenameSafeTitle(problemTitle)}.md`, { type: 'text/markdown' })
     selected.value = await api.uploadBatch('单题分析', [file])
+    jobs.value = upsertJob(jobs.value, selected.value.job)
+    jobDetails.value = upsertDetail(jobDetails.value, selected.value)
     statusFilter.value = 'ALL'
     selectedItem.value = preferredItem()
     editing.value = false
@@ -99,30 +111,16 @@ async function onFileChange(event: Event) {
 async function loadJobs(keepSelection = true) {
   try {
     jobs.value = await api.listBatchJobs()
-    if (selected.value && keepSelection) {
-      const stillExists = jobs.value.some(job => job.id === selected.value?.job.id)
-      if (stillExists) {
-        selected.value = await api.getBatchJob(selected.value.job.id)
-        syncSelectedItem()
-        return
-      }
-    }
-    const activeJob = jobs.value.find(isActiveJob)
-    if (activeJob) {
-      await selectJob(activeJob.id)
+    jobDetails.value = await Promise.all(jobs.value.map(job => api.getBatchJob(job.id)))
+    if (selectedItem.value && keepSelection) {
+      syncSelectedItem()
     } else {
-      selected.value = null
-      selectedItem.value = null
+      selectedItem.value = preferredItem()
     }
+    selected.value = selectedItem.value ? detailForItem(selectedItem.value) ?? null : null
   } catch (err) {
     batchError.value = err instanceof Error ? err.message : '任务加载失败'
   }
-}
-
-async function selectJob(id: number) {
-  selected.value = await api.getBatchJob(id)
-  selectedItem.value = preferredItem()
-  editing.value = false
 }
 
 async function uploadBatch() {
@@ -134,6 +132,8 @@ async function uploadBatch() {
   batchError.value = ''
   try {
     selected.value = await api.uploadBatch(batchName.value, batchFiles.value)
+    jobs.value = upsertJob(jobs.value, selected.value.job)
+    jobDetails.value = upsertDetail(jobDetails.value, selected.value)
     statusFilter.value = 'ALL'
     selectedItem.value = preferredItem()
     batchFiles.value = []
@@ -144,8 +144,9 @@ async function uploadBatch() {
   }
 }
 
-function selectItem(item: BatchItem) {
+function selectItem(item: QueueEntry) {
   selectedItem.value = item
+  selected.value = detailForItem(selectedItem.value) ?? null
   editing.value = false
 }
 
@@ -156,56 +157,90 @@ function selectStatusFilter(nextFilter: BatchStatusFilter) {
   selectedItem.value = filteredQueueItems.value[0] ?? null
 }
 
-function startEdit(item: BatchItem) {
+function startEdit(item: QueueEntry) {
   if (item.status !== 'PENDING') return
   selectedItem.value = item
+  selected.value = detailForItem(item) ?? null
   editTitle.value = item.title
   editContent.value = item.content
   editing.value = true
 }
 
 async function saveItemEdit() {
-  if (!selectedJob.value || !selectedItem.value) return
-  const updated = await api.updateBatchItem(selectedJob.value.id, selectedItem.value.id, {
+  if (!selectedItem.value) return
+  const updated = await api.updateBatchItem(selectedItem.value.jobId, selectedItem.value.id, {
     title: editTitle.value,
     content: editContent.value
   })
-  selectedItem.value = updated
+  const detail = detailForJobId(selectedItem.value.jobId)
+  selectedItem.value = detail ? withJobMeta(updated, detail) : selectedItem.value
   editing.value = false
   await loadJobs()
 }
 
-async function deleteItem(item: BatchItem) {
-  if (!selectedJob.value || item.status !== 'PENDING') return
-  selected.value = await api.deleteBatchItem(selectedJob.value.id, item.id)
+async function deleteItem(item: QueueEntry) {
+  if (item.status !== 'PENDING') return
+  selected.value = await api.deleteBatchItem(item.jobId, item.id)
+  jobs.value = upsertJob(jobs.value, selected.value.job)
+  jobDetails.value = upsertDetail(jobDetails.value, selected.value)
   selectedItem.value = filteredQueueItems.value[0] ?? preferredItem()
   await loadJobs()
 }
 
-function onDragStart(item: BatchItem) {
+function onDragStart(item: QueueEntry) {
   if (item.status !== 'PENDING') return
   draggedItemId.value = item.id
 }
 
-async function onDrop(target: BatchItem) {
-  if (!selectedJob.value || target.status !== 'PENDING' || draggedItemId.value === null || draggedItemId.value === target.id) {
+async function onDrop(target: QueueEntry) {
+  const dragged = queueItems.value.find(item => item.id === draggedItemId.value)
+  if (!dragged || target.status !== 'PENDING' || dragged.status !== 'PENDING' || dragged.jobId !== target.jobId || dragged.id === target.id) {
     draggedItemId.value = null
     return
   }
-  const pending = queueItems.value.filter(item => item.status === 'PENDING')
+  const pending = queueItems.value.filter(item => item.jobId === target.jobId && item.status === 'PENDING')
   const from = pending.findIndex(item => item.id === draggedItemId.value)
   const to = pending.findIndex(item => item.id === target.id)
   if (from < 0 || to < 0) return
   const reordered = [...pending]
   const [moved] = reordered.splice(from, 1)
   reordered.splice(to, 0, moved)
-  selected.value = await api.reorderBatchItems(selectedJob.value.id, reordered.map(item => item.id))
+  selected.value = await api.reorderBatchItems(target.jobId, reordered.map(item => item.id))
+  jobs.value = upsertJob(jobs.value, selected.value.job)
+  jobDetails.value = upsertDetail(jobDetails.value, selected.value)
   draggedItemId.value = null
   syncSelectedItem()
 }
 
 function countItemsByStatus(status: BatchItem['status']) {
   return queueItems.value.filter(item => item.status === status).length
+}
+
+function upsertJob(source: BatchJob[], job: BatchJob) {
+  const others = source.filter(item => item.id !== job.id)
+  return [job, ...others].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+}
+
+function upsertDetail(source: BatchJobDetail[], detail: BatchJobDetail) {
+  const others = source.filter(item => item.job.id !== detail.job.id)
+  return [detail, ...others].sort((a, b) => new Date(b.job.createdAt).getTime() - new Date(a.job.createdAt).getTime())
+}
+
+function withJobMeta(item: BatchItem, detail: BatchJobDetail): QueueEntry {
+  return {
+    ...item,
+    jobId: detail.job.id,
+    jobName: detail.job.name,
+    jobCreatedAt: detail.job.createdAt
+  }
+}
+
+function detailForJobId(jobId: number) {
+  return jobDetails.value.find(detail => detail.job.id === jobId)
+}
+
+function detailForItem(item: QueueEntry) {
+  return detailForJobId(item.jobId)
 }
 
 function matchesStatusFilter(item: BatchItem, filter: BatchStatusFilter) {
@@ -219,16 +254,18 @@ function preferredItem() {
 }
 
 function syncSelectedItem() {
-  if (!selected.value) {
+  if (!queueItems.value.length) {
     selectedItem.value = null
+    selected.value = null
     return
   }
   const updated = selectedItem.value
-    ? selected.value.items.find(item => item.id === selectedItem.value?.id) ?? null
+    ? queueItems.value.find(item => item.id === selectedItem.value?.id) ?? null
     : null
   selectedItem.value = updated && matchesStatusFilter(updated, statusFilter.value)
     ? updated
     : preferredItem()
+  selected.value = selectedItem.value ? detailForItem(selectedItem.value) ?? null : null
 }
 
 function errorSummary(message: string) {
@@ -343,7 +380,7 @@ onUnmounted(() => {
         <h2>任务列表</h2>
       </div>
 
-      <div v-if="selectedJob" class="status-filters" aria-label="任务状态筛选">
+      <div v-if="queueItems.length" class="status-filters" aria-label="任务状态筛选">
         <button
           v-for="option in statusFilterOptions"
           :key="option.value"
@@ -372,13 +409,13 @@ onUnmounted(() => {
           @drop="onDrop(item)"
         >
           <strong><span>{{ index + 1 }}</span>{{ item.title }}</strong>
-          <small>{{ displayStatusText(item) }}</small>
+          <small>{{ item.jobName }} · {{ displayStatusText(item) }}</small>
           <span v-if="item.status === 'FAILED' && item.errorMessage" class="error-summary">
             {{ isErrorExpanded(item.id) ? item.errorMessage : errorSummary(item.errorMessage) }}
           </span>
         </button>
-        <p v-if="selectedJob && filteredQueueItems.length === 0" class="status">{{ emptyFilterText }}</p>
-        <p v-if="!selectedJob" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
+        <p v-if="queueItems.length && filteredQueueItems.length === 0" class="status">{{ emptyFilterText }}</p>
+        <p v-if="!queueItems.length" class="status">暂无任务，选择多个题面文件后可加入队列。</p>
       </div>
 
     </aside>
@@ -462,7 +499,6 @@ onUnmounted(() => {
   line-height: 1.25;
 }
 
-.job-strip,
 .queue-list {
   display: grid;
   gap: 8px;
