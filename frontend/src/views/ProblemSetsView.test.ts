@@ -94,5 +94,5 @@ test('opens a problem statement from the selected problem set', async () => {
 
   expect(await screen.findByRole('dialog', { name: /基础模拟/ })).toBeTruthy()
   expect(screen.getByText(/输出最大值/)).toBeTruthy()
-  expect(document.querySelector('.problem-statement .katex')).toBeTruthy()
+  expect(document.querySelector('.problem-statement .compact-math')).toBeTruthy()
 })

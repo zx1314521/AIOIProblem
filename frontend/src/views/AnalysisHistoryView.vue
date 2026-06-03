@@ -1,13 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import MarkdownIt from 'markdown-it'
-import markdownItKatex from 'markdown-it-katex'
 import { Clock3, Cpu, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
-import { renderProblemMarkdown } from '../utils/problemMath'
+import { createProblemMarkdown, renderProblemMarkdown } from '../utils/problemMath'
 
-const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
+const markdown = createProblemMarkdown()
 
 interface HistoryEntry {
   job: BatchJob

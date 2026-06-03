@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import MarkdownIt from 'markdown-it'
-import markdownItKatex from 'markdown-it-katex'
 import { ArrowDown, ArrowUp, CheckCircle2, FolderPlus, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet } from '../types'
-import { renderProblemMarkdown } from '../utils/problemMath'
+import { createProblemMarkdown, renderProblemMarkdown } from '../utils/problemMath'
 
 const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困难', '地狱NOI']
-const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
+const markdown = createProblemMarkdown()
 
 const sets = ref<ProblemSet[]>([])
 const selectedSetId = ref<number | null>(null)

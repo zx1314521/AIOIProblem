@@ -1,4 +1,5 @@
-import type MarkdownIt from 'markdown-it'
+import MarkdownIt from 'markdown-it'
+import { katex } from '@mdit/plugin-katex'
 
 const SUBSCRIPTED_SYMBOL = String.raw`[A-Za-z][A-Za-z0-9]*_(?:\{[^}\n]+\}|[A-Za-z0-9]+)`
 const MATH_COMMAND = String.raw`\\[A-Za-z]+(?:_\{[^}\n]+\}|_[A-Za-z0-9]+)?(?:\^\{[^}\n]+\}|\^[A-Za-z0-9]+)?`
@@ -19,6 +20,10 @@ const relationPattern = new RegExp(
 
 const commandExpressionPattern = new RegExp(
   String.raw`${MATH_PREFIX}(${MATH_COMMAND}(?:\s+${MATH_ATOM})?)(?![\p{L}\p{N}_$])`,
+  'gu'
+)
+const bareLatexExpressionPattern = new RegExp(
+  String.raw`${MATH_PREFIX}(\\(?:max|min|sum|prod|frac|sqrt|oplus|otimes|times|cdot|leq|geq|neq)(?:[^，。；：、\n]|\\[A-Za-z]+)+)`,
   'gu'
 )
 const subscriptPattern = new RegExp(String.raw`${MATH_PREFIX}(${SUBSCRIPTED_SYMBOL})(?![\p{L}\p{N}_$])`, 'gu')
@@ -58,6 +63,13 @@ const SUBSCRIPT_CHARACTERS: Record<string, string> = {
   x: 'ₓ'
 }
 
+export function createProblemMarkdown() {
+  return new MarkdownIt({ breaks: true, linkify: true }).use(katex, {
+    delimiters: 'all',
+    throwOnError: false
+  })
+}
+
 export function normalizeProblemMath(source: string) {
   const converted = source
     .replace(/\\dots/g, '\\ldots')
@@ -66,12 +78,23 @@ export function normalizeProblemMath(source: string) {
 
   return converted
     .split(/(\$\$[\s\S]*?\$\$|\$[^$\n]+\$)/g)
-    .map(part => part.startsWith('$') ? part : wrapLooseMath(part))
+    .map(part => normalizeMathSegment(part))
     .join('')
 }
 
 export function renderProblemMarkdown(markdown: MarkdownIt, source: string) {
   return renderCompactMath(markdown.render(normalizeProblemMath(source)))
+}
+
+function normalizeMathSegment(part: string) {
+  if (!part.startsWith('$')) {
+    return wrapLooseMath(part)
+  }
+  if (part.startsWith('$$')) {
+    return part
+  }
+  const expression = part.slice(1, -1).trim()
+  return shouldRenderCompact(expression) ? compactMathMarker(expression) : part
 }
 
 function wrapLooseMath(source: string) {
@@ -85,12 +108,24 @@ function wrapLooseMath(source: string) {
 
   const wrapped = source
     .replace(sequencePattern, (_, prefix: string, expression: string) => `${prefix}${expression.includes('_') ? protectCompact(expression) : protect(expression)}`)
+    .replace(bareLatexExpressionPattern, (_, prefix: string, expression: string) => `${prefix}${protect(expression)}`)
     .replace(commandExpressionPattern, (_, prefix: string, expression: string) => `${prefix}${protect(expression)}`)
     .replace(relationPattern, (_, prefix: string, expression: string) => `${prefix}${expression.includes('_') ? protectCompact(expression) : protect(expression)}`)
     .replace(subscriptPattern, (_, prefix: string, expression: string) => `${prefix}${protectCompact(expression)}`)
     .replace(commandPattern, (_, prefix: string, command: string) => `${prefix}${protect(`\\${command}`)}`)
 
   return placeholders.reduce((text, value, index) => text.replace(`@@AIOI_MATH_${index}@@`, value), wrapped)
+}
+
+function shouldRenderCompact(expression: string) {
+  if (!expression.includes('_')) {
+    return false
+  }
+  const withoutTextCommands = expression.replace(/\\(?:ldots|cdots)/g, '')
+  if (/\\[A-Za-z]+/.test(withoutTextCommands)) {
+    return false
+  }
+  return /^[A-Za-z0-9_{}\s,，、.+\-<>=()…]+$/.test(withoutTextCommands)
 }
 
 function compactMathMarker(expression: string) {

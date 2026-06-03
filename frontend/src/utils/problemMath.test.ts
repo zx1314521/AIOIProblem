@@ -1,9 +1,7 @@
 import { describe, expect, test } from 'vitest'
-import MarkdownIt from 'markdown-it'
-import markdownItKatex from 'markdown-it-katex'
-import { normalizeProblemMath, renderProblemMarkdown } from './problemMath'
+import { createProblemMarkdown, normalizeProblemMath, renderProblemMarkdown } from './problemMath'
 
-const markdown = new MarkdownIt({ breaks: true }).use(markdownItKatex)
+const markdown = createProblemMarkdown()
 
 describe('normalizeProblemMath', () => {
   test('wraps common OI subscript sequences as one formula', () => {
@@ -59,7 +57,22 @@ describe('normalizeProblemMath', () => {
     expect(normalizeProblemMath('最大化 \\sum_{i=1}^{r-l+1} h_i')).toBe('最大化 $\\sum_{i=1}^{r-l+1} h_i$')
   })
 
-  test('keeps explicit math rendered by KaTeX', () => {
-    expect(renderProblemMarkdown(markdown, '给定数组 $a_i$')).toContain('class="katex"')
+  test('renders explicit simple subscript math compactly', () => {
+    const html = renderProblemMarkdown(markdown, '给定数组 $a_1,a_2,\\ldots,a_n$')
+
+    expect(html).toContain('<span class="compact-math"')
+    expect(html).toContain('ₙ')
+    expect(html).not.toContain('class="katex"')
+  })
+
+  test('wraps imported bare latex command expressions', () => {
+    const html = renderProblemMarkdown(
+      markdown,
+      '权值为 \\max_{i=1}^{n-1} (a_{p_i} \\oplus a_{p_{i+1}})，其中 ⊕ 为异或运算。'
+    )
+
+    expect(html).toContain('class="katex"')
+    expect(html).not.toContain('katex-error')
+    expect(html).toContain('⊕')
   })
 })
