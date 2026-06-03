@@ -440,18 +440,50 @@ a:focus-visible {
 
 .markdown-preview {
   color: #24312c;
-  line-height: 1.8;
+  line-height: 1.72;
   font-size: 15px;
 }
 
-.markdown-preview .katex,
-.markdown-preview .katex * {
-  white-space: nowrap;
+.markdown-preview p {
+  margin: 0 0 0.8em;
+}
+
+.markdown-preview ul,
+.markdown-preview ol {
+  margin: 0.55em 0 0.9em;
+  padding-left: 1.45em;
+}
+
+.markdown-preview li {
+  margin: 0.28em 0;
+  padding-left: 0.1em;
 }
 
 .markdown-preview .katex {
+  display: inline;
+  font-size: 1.04em;
+  line-height: 1;
+  vertical-align: -0.04em;
+}
+
+.markdown-preview .katex-html,
+.markdown-preview .katex-html * {
+  white-space: nowrap;
+}
+
+.markdown-preview .katex-display {
+  display: block;
+  margin: 0.9em 0 1em;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 0.2em 0.1em 0.35em;
+  text-align: center;
+}
+
+.markdown-preview .katex-display > .katex {
   display: inline-block;
   max-width: 100%;
+  vertical-align: middle;
 }
 
 .markdown-preview pre {
