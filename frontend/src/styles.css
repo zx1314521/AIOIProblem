@@ -459,31 +459,41 @@ a:focus-visible {
   padding-left: 0.1em;
 }
 
-.markdown-preview .katex {
+.markdown-preview .compact-math {
   display: inline;
-  font-size: 1.04em;
-  line-height: 1;
-  vertical-align: -0.04em;
+  white-space: normal;
+  font-family: "Times New Roman", "Cambria Math", serif;
+  font-size: 1.02em;
 }
 
-.markdown-preview .katex-html,
-.markdown-preview .katex-html * {
+.markdown-preview .compact-var {
+  display: inline-block;
   white-space: nowrap;
+  margin: 0 0.02em;
+  vertical-align: baseline;
+}
+
+.markdown-preview .compact-var var {
+  font-style: italic;
+}
+
+.markdown-preview .compact-sub {
+  font-size: 0.96em;
+  font-style: normal;
+  line-height: 0;
+}
+
+.markdown-preview .compact-var sub {
+  font-size: 0.68em;
+  line-height: 1;
+  vertical-align: -0.18em;
 }
 
 .markdown-preview .katex-display {
-  display: block;
   margin: 0.9em 0 1em;
   overflow-x: auto;
   overflow-y: hidden;
   padding: 0.2em 0.1em 0.35em;
-  text-align: center;
-}
-
-.markdown-preview .katex-display > .katex {
-  display: inline-block;
-  max-width: 100%;
-  vertical-align: middle;
 }
 
 .markdown-preview pre {

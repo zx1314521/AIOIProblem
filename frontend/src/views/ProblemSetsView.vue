@@ -2,11 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from 'markdown-it-katex'
-import 'katex/dist/katex.min.css'
 import { ArrowDown, ArrowUp, CheckCircle2, FolderPlus, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet } from '../types'
-import { normalizeProblemMath } from '../utils/problemMath'
+import { renderProblemMarkdown } from '../utils/problemMath'
 
 const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困难', '地狱NOI']
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
@@ -28,7 +27,7 @@ const selectedProblem = ref<Problem | null>(null)
 
 const selectedSet = computed(() => sets.value.find(set => set.id === selectedSetId.value) ?? sets.value[0])
 const selectedSetProblemIds = computed(() => new Set(selectedSet.value?.problems.map(problem => problem.id) ?? []))
-const selectedProblemHtml = computed(() => markdown.render(normalizeProblemMath(selectedProblem.value?.description || '')))
+const selectedProblemHtml = computed(() => renderProblemMarkdown(markdown, selectedProblem.value?.description || ''))
 
 const selectedSetStats = computed(() => {
   const problems = selectedSet.value?.problems ?? []

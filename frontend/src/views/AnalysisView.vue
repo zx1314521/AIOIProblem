@@ -2,11 +2,10 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from 'markdown-it-katex'
-import 'katex/dist/katex.min.css'
 import { Edit3, FileText, Save, Trash2, UploadCloud } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
-import { normalizeProblemMath } from '../utils/problemMath'
+import { renderProblemMarkdown } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 type BatchStatusFilter = 'ALL' | BatchItem['status']
@@ -56,7 +55,7 @@ const emptyFilterText = computed(() => {
   const option = statusFilterOptions.value.find(item => item.value === statusFilter.value)
   return option ? `当前没有${option.label === '全部' ? '任务' : `${option.label}题`}` : '当前没有任务'
 })
-const previewHtml = computed(() => markdown.render(normalizeProblemMath(selectedItem.value?.content || '')))
+const previewHtml = computed(() => renderProblemMarkdown(markdown, selectedItem.value?.content || ''))
 
 async function analyzeText() {
   const content = text.value.trim()

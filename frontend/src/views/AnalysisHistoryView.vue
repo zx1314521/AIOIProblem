@@ -2,11 +2,10 @@
 import { computed, onMounted, ref } from 'vue'
 import MarkdownIt from 'markdown-it'
 import markdownItKatex from 'markdown-it-katex'
-import 'katex/dist/katex.min.css'
 import { Clock3, Cpu, FileText, RefreshCw, Sparkles } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { BatchItem, BatchJob, BatchJobDetail } from '../types'
-import { normalizeProblemMath } from '../utils/problemMath'
+import { renderProblemMarkdown } from '../utils/problemMath'
 
 const markdown = new MarkdownIt({ breaks: true, linkify: true }).use(markdownItKatex)
 
@@ -31,7 +30,7 @@ const historyEntries = computed(() => {
 const successCount = computed(() => historyEntries.value.filter(entry => entry.item.status === 'SUCCEEDED' && !isFallbackItem(entry.item)).length)
 const fallbackCount = computed(() => historyEntries.value.filter(entry => isFallbackItem(entry.item)).length)
 const failedCount = computed(() => historyEntries.value.filter(entry => entry.item.status === 'FAILED').length)
-const previewHtml = computed(() => markdown.render(normalizeProblemMath(selected.value?.item.content || '')))
+const previewHtml = computed(() => renderProblemMarkdown(markdown, selected.value?.item.content || ''))
 
 async function loadHistory() {
   loading.value = true

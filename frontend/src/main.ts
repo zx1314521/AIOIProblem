@@ -3,6 +3,7 @@ import { createRouter, createWebHashHistory } from 'vue-router'
 import App from './App.vue'
 import { routes } from './routes'
 import { consumeExtensionAuthFromLocation } from './services/extensionAuth'
+import 'katex/dist/katex.min.css'
 import './styles.css'
 
 consumeExtensionAuthFromLocation()
