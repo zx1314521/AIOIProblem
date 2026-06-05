@@ -1,7 +1,9 @@
 package cn.aioi.problem.api;
 
+import cn.aioi.problem.api.dto.BatchDtos;
 import cn.aioi.problem.api.dto.ProblemDtos;
 import cn.aioi.problem.security.UserPrincipal;
+import cn.aioi.problem.service.BatchJobService;
 import cn.aioi.problem.service.ProblemService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
@@ -23,9 +25,11 @@ import java.util.List;
 @RequestMapping("/api/problems")
 public class ProblemController {
     private final ProblemService problemService;
+    private final BatchJobService batchJobService;
 
-    public ProblemController(ProblemService problemService) {
+    public ProblemController(ProblemService problemService, BatchJobService batchJobService) {
         this.problemService = problemService;
+        this.batchJobService = batchJobService;
     }
 
     @GetMapping
@@ -69,6 +73,12 @@ public class ProblemController {
     List<ProblemDtos.ProblemResponse> markPassedBulk(@Valid @RequestBody ProblemDtos.BulkProblemRequest request,
                                                      @AuthenticationPrincipal UserPrincipal principal) {
         return problemService.markPassedBulk(request.problemIds(), principal.user());
+    }
+
+    @PostMapping("/reanalyze")
+    BatchDtos.BatchJobDetailResponse reanalyzeBulk(@Valid @RequestBody ProblemDtos.BulkProblemRequest request,
+                                                   @AuthenticationPrincipal UserPrincipal principal) {
+        return batchJobService.reanalyzeProblems(request.problemIds(), principal.user());
     }
 
     @DeleteMapping("/{id}/passed")

@@ -12,6 +12,7 @@ vi.mock('../services/api', () => ({
     updateProblem: vi.fn(),
     deleteProblem: vi.fn(),
     deleteProblems: vi.fn(),
+    reanalyzeProblems: vi.fn(),
     markPassed: vi.fn(),
     markProblemsPassed: vi.fn(),
     unmarkPassed: vi.fn(),
@@ -217,6 +218,64 @@ test('bulk selects problems and applies passed/delete/set actions', async () => 
   await waitFor(() => {
     expect(api.deleteProblems).toHaveBeenCalledWith([1, 2])
   })
+})
+
+test('queues selected problems for reanalysis', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+  vi.mocked(api.reanalyzeProblems).mockResolvedValue({
+    job: {
+      id: 21,
+      name: '重新分析题目',
+      status: 'RUNNING',
+      totalCount: 2,
+      successCount: 0,
+      failedCount: 0,
+      pendingCount: 2,
+      runningCount: 0,
+      createdAt: '2026-06-05T00:00:00'
+    },
+    items: []
+  })
+
+  render(ProblemsView)
+
+  await userEvent.click(await screen.findByRole('button', { name: '选择' }))
+  await userEvent.click(await screen.findByRole('checkbox', { name: new RegExp(sampleProblems[0].title) }))
+  await userEvent.click(screen.getByRole('checkbox', { name: new RegExp(sampleProblems[1].title) }))
+  await userEvent.click(screen.getByRole('button', { name: /批量分析/ }))
+
+  await waitFor(() => {
+    expect(api.reanalyzeProblems).toHaveBeenCalledWith([1, 2])
+  })
+  expect(await screen.findByText('已加入重新分析队列，可在批量任务中查看进度。')).toBeTruthy()
+})
+
+test('queues a single problem for reanalysis from row actions', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+  vi.mocked(api.reanalyzeProblems).mockResolvedValue({
+    job: {
+      id: 22,
+      name: '重新分析题目',
+      status: 'RUNNING',
+      totalCount: 1,
+      successCount: 0,
+      failedCount: 0,
+      pendingCount: 1,
+      runningCount: 0,
+      createdAt: '2026-06-05T00:00:00'
+    },
+    items: []
+  })
+
+  render(ProblemsView)
+
+  const rowButtons = await screen.findAllByRole('button', { name: '分析' })
+  await userEvent.click(rowButtons[0])
+
+  await waitFor(() => {
+    expect(api.reanalyzeProblems).toHaveBeenCalledWith([2])
+  })
+  expect(await screen.findByText('《B 新题》已加入重新分析队列，可在批量任务中查看进度。')).toBeTruthy()
 })
 
 test('creates a new problem set from selected problems', async () => {
