@@ -12,6 +12,8 @@ import java.util.List;
 import java.util.Optional;
 
 public interface BatchJobItemRepository extends JpaRepository<BatchJobItem, Long> {
+    List<BatchJobItem> findByStatus(BatchItemStatus status);
+
     List<BatchJobItem> findByJobOrderByIdAsc(BatchJob job);
 
     List<BatchJobItem> findByJobOrderBySortOrderAscIdAsc(BatchJob job);

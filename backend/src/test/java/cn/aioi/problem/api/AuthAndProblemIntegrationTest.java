@@ -1,6 +1,7 @@
 package cn.aioi.problem.api;
 
 import cn.aioi.problem.api.dto.AuthDtos;
+import cn.aioi.problem.api.dto.BatchDtos;
 import cn.aioi.problem.api.dto.ProblemDtos;
 import cn.aioi.problem.api.dto.ProblemSetDtos;
 import cn.aioi.problem.api.dto.RecommendationDtos;
@@ -265,6 +266,29 @@ class AuthAndProblemIntegrationTest {
                 ProblemDtos.ProblemResponse[].class
         );
         assertThat(searched.getBody()).isEmpty();
+    }
+
+    @Test
+    void userCanQueueSelectedProblemsForReanalysis() {
+        AuthDtos.AuthResponse auth = register("reanalyze-api");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemDtos.ProblemResponse first = createProblem(headers, "重新分析 A", Set.of());
+        ProblemDtos.ProblemResponse second = createProblem(headers, "重新分析 B", Set.of());
+
+        ProblemDtos.BulkProblemRequest request = new ProblemDtos.BulkProblemRequest(List.of(first.id(), second.id()));
+        ResponseEntity<BatchDtos.BatchJobDetailResponse> queued = rest.exchange(
+                "/api/problems/reanalyze",
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                BatchDtos.BatchJobDetailResponse.class
+        );
+
+        assertThat(queued.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(queued.getBody()).isNotNull();
+        assertThat(queued.getBody().job().name()).isEqualTo("重新分析题目");
+        assertThat(queued.getBody().job().totalCount()).isEqualTo(2);
+        assertThat(queued.getBody().items()).extracting(BatchDtos.BatchItemResponse::problemId)
+                .containsExactly(first.id(), second.id());
     }
 
     @Test

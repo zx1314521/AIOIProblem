@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
-import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Pencil, Plus, Save, Search, Trash2, X } from 'lucide-vue-next'
+import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet, TagCategory } from '../types'
 import { createProblemMarkdown, renderProblemMarkdown } from '../utils/problemMath'
@@ -15,6 +15,7 @@ const formTagSearch = ref('')
 const tagCategories = ref<TagCategory[]>([])
 const problems = ref<Problem[]>([])
 const error = ref('')
+const success = ref('')
 const loading = ref(false)
 const formOpen = ref(false)
 const formMode = ref<'create' | 'edit'>('create')
@@ -87,6 +88,7 @@ async function loadCatalog() {
 async function load() {
   loading.value = true
   error.value = ''
+  success.value = ''
   const params = new URLSearchParams()
   if (keyword.value) params.set('keyword', keyword.value)
   if (difficulty.value) params.set('difficulty', difficulty.value)
@@ -214,11 +216,43 @@ async function bulkMarkPassed() {
   if (!selectedProblemIds.value.length) return
   bulkSaving.value = true
   error.value = ''
+  success.value = ''
   try {
     const updated = await api.markProblemsPassed(selectedProblemIds.value)
     syncUpdatedProblems(updated)
   } catch (err) {
     error.value = err instanceof Error ? err.message : '批量标注失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function reanalyzeSelectedProblems() {
+  if (!selectedProblemIds.value.length) return
+  const ids = [...selectedProblemIds.value]
+  bulkSaving.value = true
+  error.value = ''
+  success.value = ''
+  try {
+    await api.reanalyzeProblems(ids)
+    success.value = '已加入重新分析队列，可在批量任务中查看进度。'
+    clearSelection()
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '重新分析入队失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
+async function reanalyzeProblem(problem: Problem) {
+  bulkSaving.value = true
+  error.value = ''
+  success.value = ''
+  try {
+    await api.reanalyzeProblems([problem.id])
+    success.value = `《${problem.title}》已加入重新分析队列，可在批量任务中查看进度。`
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '重新分析入队失败'
   } finally {
     bulkSaving.value = false
   }
@@ -516,6 +550,9 @@ onMounted(async () => {
         <button class="secondary" type="button" :disabled="bulkSaving" @click="openBulkSetDialog">
           <FolderPlus :size="18" />加入题单
         </button>
+        <button class="secondary" type="button" :disabled="bulkSaving" @click="reanalyzeSelectedProblems">
+          <RefreshCw :size="18" />批量分析
+        </button>
         <button class="ghost danger" type="button" :disabled="bulkSaving" @click="bulkDelete">
           <Trash2 :size="18" />批量删除
         </button>
@@ -525,6 +562,7 @@ onMounted(async () => {
       </div>
     </div>
     <p v-if="error" class="error">{{ error }}</p>
+    <p v-if="success" class="success">{{ success }}</p>
     <div class="problem-list compact-problem-list">
       <div v-if="sortedProblems.length" class="problem-table-head" :class="{ selecting: selectionMode }">
         <span v-if="selectionMode"></span>
@@ -573,6 +611,9 @@ onMounted(async () => {
           </button>
           <button class="ghost icon-action pass-action pass-toggle" :class="{ passed: problem.passed }" type="button" :title="problem.passed ? '取消通过' : '标注已通过'" @click="togglePassed(problem)">
             <CheckCircle2 :size="15" />{{ problem.passed ? '已通过' : '通过' }}
+          </button>
+          <button class="ghost icon-action reanalyze-action" type="button" title="重新分析题目" :disabled="bulkSaving" @click="reanalyzeProblem(problem)">
+            <RefreshCw :size="15" />分析
           </button>
           <button class="ghost icon-action delete-action danger" type="button" title="删除题目" @click="deleteProblem(problem)">
             <Trash2 :size="15" />删除
@@ -644,6 +685,9 @@ onMounted(async () => {
           </button>
           <button class="ghost pass-toggle" :class="{ passed: selectedProblem.passed }" type="button" @click="togglePassed(selectedProblem)">
             <CheckCircle2 :size="18" />{{ selectedProblem.passed ? '已通过' : '标注已通过' }}
+          </button>
+          <button class="ghost" type="button" :disabled="bulkSaving" @click="reanalyzeProblem(selectedProblem)">
+            <RefreshCw :size="18" />分析
           </button>
           <button class="ghost danger" type="button" @click="deleteProblem(selectedProblem)">
             <Trash2 :size="18" />删除
@@ -907,6 +951,13 @@ h2 {
   border-color: #a9c7b9;
   background: #edf7f1;
   color: #1f6f54;
+}
+
+.success {
+  margin: 0 20px 10px;
+  color: #17684f;
+  font-size: 14px;
+  font-weight: 700;
 }
 
 .match-chip {
@@ -1273,13 +1324,13 @@ h2 {
 .problem-table-head,
 .problem-row-compact {
   display: grid;
-  grid-template-columns: 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 188px;
+  grid-template-columns: 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 272px;
   align-items: center;
 }
 
 .problem-table-head.selecting,
 .problem-row-compact.selecting-row {
-  grid-template-columns: 36px 46px 78px minmax(260px, 1fr) minmax(220px, 0.8fr) 100px 188px;
+  grid-template-columns: 36px 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 272px;
 }
 
 .problem-table-head {
@@ -1448,6 +1499,18 @@ h2 {
 .pass-action:hover {
   border-color: #92cf9f;
   background: #e4f6e8;
+}
+
+.reanalyze-action {
+  min-width: 76px;
+  border-color: #d5c7f0;
+  background: #f6f2ff;
+  color: #6f42c1;
+}
+
+.reanalyze-action:hover {
+  border-color: #b79de7;
+  background: #eee6ff;
 }
 
 .delete-action {

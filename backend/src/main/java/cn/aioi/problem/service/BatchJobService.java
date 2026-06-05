@@ -74,6 +74,13 @@ public class BatchJobService {
 
     @PostConstruct
     void resumePendingWorkOnStartup() {
+        transactionTemplate.executeWithoutResult(status -> {
+            List<BatchJobItem> interruptedItems = items.findByStatus(BatchItemStatus.RUNNING);
+            interruptedItems.forEach(BatchJobItem::returnToPendingAfterInterruption);
+            if (!interruptedItems.isEmpty()) {
+                log.info("Recovered {} interrupted batch item(s)", interruptedItems.size());
+            }
+        });
         triggerWorker();
     }
 
@@ -136,6 +143,28 @@ public class BatchJobService {
         job.resume();
         triggerWorkerAfterCommit();
         return toJobResponse(job);
+    }
+
+    @Transactional
+    public BatchDtos.BatchJobDetailResponse reanalyzeProblems(List<Long> problemIds, User user) {
+        List<Long> ids = distinctIds(problemIds);
+        if (ids.isEmpty()) {
+            throw new IllegalArgumentException("请选择至少一个题目");
+        }
+        BatchJob job = jobs.save(new BatchJob("重新分析题目", user, ids.size()));
+        int index = 0;
+        for (Long problemId : ids) {
+            Problem problem = problems.findById(problemId).orElseThrow(() -> new EntityNotFoundException("题目不存在"));
+            items.save(BatchJobItem.reanalysis(
+                    job,
+                    ProblemTextNormalizer.normalizeNamesAndTrim(problem.getTitle()),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(problem.getDescription()),
+                    index++,
+                    problem.getId()
+            ));
+        }
+        triggerWorkerAfterCommit();
+        return detail(job.getId(), user);
     }
 
     @Transactional
@@ -240,12 +269,15 @@ public class BatchJobService {
     private void processItem(Long itemId) {
         WorkItem workItem = transactionTemplate.execute(status -> {
             BatchJobItem item = items.findById(itemId).orElseThrow();
+            Long targetProblemId = item.getReanalysisProblemId();
+            Optional<Problem> targetProblem = targetProblemId == null ? Optional.empty() : problems.findById(targetProblemId);
             return new WorkItem(
                     item.getId(),
                     item.getJob().getId(),
                     item.getJob().getOwner().getId(),
-                    ProblemTextNormalizer.normalizeNamesAndTrim(item.getTitle()),
-                    ProblemTextNormalizer.normalizeNamesAndTrim(item.getContent()),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(targetProblem.map(Problem::getTitle).orElse(item.getTitle())),
+                    ProblemTextNormalizer.normalizeNamesAndTrim(targetProblem.map(Problem::getDescription).orElse(item.getContent())),
+                    targetProblemId,
                     item.getExternalPlatform(),
                     item.getExternalSourceId(),
                     item.getSourceUrl(),
@@ -258,7 +290,7 @@ public class BatchJobService {
         AiRuntimeSettings runtime = aiSettingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS);
         long started = System.nanoTime();
         try {
-            if (completeExistingExternalImport(workItem)) {
+            if (workItem.reanalysisProblemId() == null && completeExistingExternalImport(workItem)) {
                 return;
             }
             String content = contentForAnalysis(workItem);
@@ -267,7 +299,7 @@ public class BatchJobService {
             transactionTemplate.executeWithoutResult(status -> {
                 BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
                 User owner = users.getReferenceById(workItem.ownerId());
-                Problem problem = existingExternalProblem(workItem);
+                Problem problem = targetProblem(workItem);
                 boolean created = false;
                 if (problem == null) {
                     problem = problems.save(new Problem(
@@ -282,6 +314,14 @@ public class BatchJobService {
                             workItem.sourceUrl()
                     ));
                     created = true;
+                } else if (workItem.reanalysisProblemId() != null) {
+                    problem.update(
+                            problem.getTitle(),
+                            content,
+                            assessment.difficulty(),
+                            ProblemService.sanitizeAiTags(assessment.tags(), tagCatalog),
+                            problem.getSource()
+                    );
                 }
                 markPassedIfNeeded(problem, owner, workItem.markPassedAfterImport(), created);
                 item.completeAnalysisMetadata(
@@ -350,6 +390,13 @@ public class BatchJobService {
                 .orElse(null);
     }
 
+    private Problem targetProblem(WorkItem workItem) {
+        if (workItem.reanalysisProblemId() != null) {
+            return problems.findById(workItem.reanalysisProblemId()).orElseThrow(() -> new EntityNotFoundException("题目不存在"));
+        }
+        return existingExternalProblem(workItem);
+    }
+
     private String contentForAnalysis(WorkItem workItem) {
         try {
             String polished = aiProvider.polishProblemStatement(new ProblemInput(workItem.title(), workItem.content()), AiTaskType.PROBLEM_ANALYSIS);
@@ -411,14 +458,15 @@ public class BatchJobService {
     }
 
     private BatchDtos.BatchItemResponse toItemResponse(BatchJobItem item) {
-        Optional<Problem> problem = item.getProblemId() == null ? Optional.empty() : problems.findById(item.getProblemId());
+        Long responseProblemId = item.getProblemId() == null ? item.getReanalysisProblemId() : item.getProblemId();
+        Optional<Problem> problem = responseProblemId == null ? Optional.empty() : problems.findById(responseProblemId);
         return new BatchDtos.BatchItemResponse(
                 item.getId(),
                 item.getTitle(),
                 item.getContent(),
                 item.getStatus().name(),
                 item.getSortOrder(),
-                item.getProblemId(),
+                responseProblemId,
                 problem.map(value -> value.getDifficulty().label()).orElse(null),
                 problem.map(value -> value.getDifficulty().name()).orElse(null),
                 problem.map(value -> value.getTags().stream().sorted().toList()).orElse(List.of()),
@@ -518,13 +566,22 @@ public class BatchJobService {
         return name == null || name.isBlank() ? "批量导入任务" : name.trim();
     }
 
+    private static List<Long> distinctIds(List<Long> ids) {
+        if (ids == null) {
+            return List.of();
+        }
+        return ids.stream()
+                .distinct()
+                .toList();
+    }
+
     @PreDestroy
     void shutdown() {
         executor.shutdownNow();
     }
 
     private record WorkItem(Long itemId, Long jobId, Long ownerId, String title, String content,
-                            String externalPlatform, String externalSourceId, String sourceUrl,
+                            Long reanalysisProblemId, String externalPlatform, String externalSourceId, String sourceUrl,
                             boolean markPassedAfterImport) {
     }
 }

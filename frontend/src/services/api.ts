@@ -59,6 +59,8 @@ export const api = {
     request<Problem[]>('/api/problems/bulk/passed', { method: 'POST', body: JSON.stringify({ problemIds }) }),
   deleteProblems: (problemIds: number[]) =>
     request<void>('/api/problems/bulk', { method: 'DELETE', body: JSON.stringify({ problemIds }) }),
+  reanalyzeProblems: (problemIds: number[]) =>
+    request<BatchJobDetail>('/api/problems/reanalyze', { method: 'POST', body: JSON.stringify({ problemIds }) }),
   listProblemSets: () => request<ProblemSet[]>('/api/problem-sets'),
   createProblemSet: (name: string, description: string) =>
     request<ProblemSet>('/api/problem-sets', { method: 'POST', body: JSON.stringify({ name, description }) }),

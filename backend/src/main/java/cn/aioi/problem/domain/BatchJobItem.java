@@ -41,6 +41,8 @@ public class BatchJobItem {
 
     private Long problemId;
 
+    private Long reanalysisProblemId;
+
     @Column(columnDefinition = "TEXT")
     private String errorMessage;
 
@@ -104,6 +106,12 @@ public class BatchJobItem {
         return item;
     }
 
+    public static BatchJobItem reanalysis(BatchJob job, String title, String content, int sortOrder, Long problemId) {
+        BatchJobItem item = new BatchJobItem(job, title, content, sortOrder);
+        item.reanalysisProblemId = problemId;
+        return item;
+    }
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {
@@ -114,6 +122,13 @@ public class BatchJobItem {
     public void start() {
         status = BatchItemStatus.RUNNING;
         startedAt = Instant.now();
+    }
+
+    public void returnToPendingAfterInterruption() {
+        if (status == BatchItemStatus.RUNNING) {
+            status = BatchItemStatus.PENDING;
+            startedAt = null;
+        }
     }
 
     public void succeed(Long problemId) {
@@ -188,6 +203,10 @@ public class BatchJobItem {
 
     public Long getProblemId() {
         return problemId;
+    }
+
+    public Long getReanalysisProblemId() {
+        return reanalysisProblemId;
     }
 
     public String getErrorMessage() {
