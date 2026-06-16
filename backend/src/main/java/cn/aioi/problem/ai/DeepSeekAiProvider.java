@@ -6,6 +6,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import org.springframework.http.MediaType;
 import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
+import org.springframework.util.StreamUtils;
 import org.springframework.web.client.RestClient;
 
 import java.nio.charset.StandardCharsets;
@@ -96,13 +97,18 @@ public class DeepSeekAiProvider {
                 ),
                 "temperature", 0.2
         );
-        byte[] response = client.post()
+        return client.post()
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer " + apiKey)
                 .body(body)
-                .retrieve()
-                .body(byte[].class);
-        return response == null ? "" : new String(response, StandardCharsets.UTF_8);
+                .exchange((request, response) -> {
+                    byte[] raw = StreamUtils.copyToByteArray(response.getBody());
+                    String text = new String(raw, StandardCharsets.UTF_8);
+                    if (response.getStatusCode().isError()) {
+                        throw new IllegalStateException(response.getStatusCode().value() + " " + response.getStatusText() + ": " + text);
+                    }
+                    return text;
+                });
     }
 
     static String chatCompletionsUrl(String baseUrl) {
