@@ -8,6 +8,7 @@ import org.springframework.http.client.SimpleClientHttpRequestFactory;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
+import java.nio.charset.StandardCharsets;
 import java.time.Duration;
 import java.util.List;
 import java.util.Map;
@@ -95,13 +96,13 @@ public class DeepSeekAiProvider {
                 ),
                 "temperature", 0.2
         );
-        String response = client.post()
+        byte[] response = client.post()
                 .contentType(MediaType.APPLICATION_JSON)
                 .header("Authorization", "Bearer " + apiKey)
                 .body(body)
                 .retrieve()
-                .body(String.class);
-        return response == null ? "" : response;
+                .body(byte[].class);
+        return response == null ? "" : new String(response, StandardCharsets.UTF_8);
     }
 
     static String chatCompletionsUrl(String baseUrl) {
