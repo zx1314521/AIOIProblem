@@ -84,7 +84,7 @@ public class DeepSeekAiProvider {
         requestFactory.setConnectTimeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)));
         requestFactory.setReadTimeout(Duration.ofSeconds(Math.max(1, timeoutSeconds)));
         RestClient client = RestClient.builder()
-                .baseUrl(baseUrl)
+                .baseUrl(chatCompletionsUrl(baseUrl))
                 .requestFactory(requestFactory)
                 .build();
         Map<String, Object> body = Map.of(
@@ -102,6 +102,19 @@ public class DeepSeekAiProvider {
                 .retrieve()
                 .body(String.class);
         return response == null ? "" : response;
+    }
+
+    static String chatCompletionsUrl(String baseUrl) {
+        String cleaned = (baseUrl == null || baseUrl.isBlank())
+                ? "https://api.deepseek.com"
+                : baseUrl.trim();
+        while (cleaned.endsWith("/")) {
+            cleaned = cleaned.substring(0, cleaned.length() - 1);
+        }
+        if (cleaned.endsWith("/chat/completions")) {
+            return cleaned;
+        }
+        return cleaned + "/chat/completions";
     }
 
     private String systemPrompt() {
