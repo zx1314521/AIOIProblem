@@ -55,8 +55,10 @@ class ProblemServiceSearchTest {
         assertThat(responses).hasSize(2);
         assertThat(responses).extracting("id").containsExactly(20L, 10L);
         assertThat(responses.get(0).passed()).isTrue();
+        assertThat(responses.get(0).description()).isEmpty();
         assertThat(responses.get(0).dataStatus()).isEqualTo("NONE");
         assertThat(responses.get(1).passed()).isFalse();
+        assertThat(responses.get(1).description()).isEmpty();
         assertThat(responses.get(1).dataStatus()).isEqualTo("READY");
         verify(passedProblems, never()).existsByUserAndProblem(any(), any());
         verify(dataSets, never()).findStatusByProblemId(any());

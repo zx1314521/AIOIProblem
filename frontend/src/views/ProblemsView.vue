@@ -135,16 +135,33 @@ function openCreate() {
   formOpen.value = true
 }
 
-function openEdit(problem: Problem) {
+async function ensureProblemDetail(problem: Problem) {
+  if (problem.description) {
+    return problem
+  }
+  const detail = await api.getProblem(problem.id)
+  problems.value = problems.value.map(item => item.id === detail.id ? detail : item)
+  upsertCachedProblem(detail)
+  return detail
+}
+
+async function openEdit(problem: Problem) {
+  let detail: Problem
+  try {
+    detail = await ensureProblemDetail(problem)
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '棰樼洰璇︽儏鍔犺浇澶辫触'
+    return
+  }
   formMode.value = 'edit'
-  editingProblemId.value = problem.id
+  editingProblemId.value = detail.id
   detailOpen.value = false
   problemForm.value = {
-    title: problem.title,
-    description: problem.description,
-    difficulty: problem.difficulty,
-    tags: [...problem.tags],
-    source: problem.source || ''
+    title: detail.title,
+    description: detail.description,
+    difficulty: detail.difficulty,
+    tags: [...detail.tags],
+    source: detail.source || ''
   }
   formTagSearch.value = ''
   formOpen.value = true

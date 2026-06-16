@@ -57,7 +57,7 @@ public class ProblemService {
                 .toList();
         ProblemStateLookup stateLookup = loadState(matches, user);
         return matches.stream()
-                .map(problem -> response(problem, stateLookup.passedIds().contains(problem.getId()),
+                .map(problem -> listResponse(problem, stateLookup.passedIds().contains(problem.getId()),
                         stateLookup.dataStatuses().getOrDefault(problem.getId(), "NONE")))
                 .toList();
     }
@@ -266,6 +266,24 @@ public class ProblemService {
 
     private ProblemDtos.ProblemResponse response(Problem problem, boolean passed, String dataStatus) {
         return ProblemDtos.ProblemResponse.from(problem, passed, dataStatus);
+    }
+
+    private ProblemDtos.ProblemResponse listResponse(Problem problem, boolean passed, String dataStatus) {
+        return new ProblemDtos.ProblemResponse(
+                problem.getId(),
+                problem.getTitle(),
+                "",
+                problem.getDifficulty().label(),
+                problem.getDifficulty().name(),
+                problem.getTags().stream().sorted().toList(),
+                problem.getSource(),
+                problem.getExternalPlatform(),
+                problem.getExternalSourceId(),
+                problem.getSourceUrl(),
+                problem.getCreatedAt(),
+                passed,
+                dataStatus == null ? "NONE" : dataStatus
+        );
     }
 
     private ProblemStateLookup loadState(List<Problem> matches, User user) {
