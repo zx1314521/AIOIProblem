@@ -7,6 +7,7 @@ import cn.aioi.problem.domain.Problem;
 import cn.aioi.problem.domain.User;
 import cn.aioi.problem.repository.BatchJobItemRepository;
 import cn.aioi.problem.repository.PassedProblemRepository;
+import cn.aioi.problem.repository.ProblemDataSetRepository;
 import cn.aioi.problem.repository.ProblemRepository;
 import cn.aioi.problem.repository.ProblemSetItemRepository;
 import jakarta.persistence.EntityNotFoundException;
@@ -28,15 +29,17 @@ public class ProblemService {
     private final PassedProblemRepository passedProblems;
     private final ProblemSetItemRepository problemSetItems;
     private final BatchJobItemRepository batchJobItems;
+    private final ProblemDataSetRepository dataSets;
     private final TagCatalogService tagCatalog;
 
     public ProblemService(ProblemRepository problems, PassedProblemRepository passedProblems,
                           ProblemSetItemRepository problemSetItems, BatchJobItemRepository batchJobItems,
-                          TagCatalogService tagCatalog) {
+                          ProblemDataSetRepository dataSets, TagCatalogService tagCatalog) {
         this.problems = problems;
         this.passedProblems = passedProblems;
         this.problemSetItems = problemSetItems;
         this.batchJobItems = batchJobItems;
+        this.dataSets = dataSets;
         this.tagCatalog = tagCatalog;
     }
 
@@ -50,7 +53,7 @@ public class ProblemService {
                 .filter(problem -> matchesKeyword(problem, normalizedKeyword))
                 .filter(problem -> parsedDifficulty == null || problem.getDifficulty() == parsedDifficulty)
                 .sorted(searchComparator(normalizedTags))
-                .map(problem -> ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem)))
+                .map(problem -> response(problem, user))
                 .toList();
     }
 
@@ -65,7 +68,7 @@ public class ProblemService {
                 blankToNull(request.source()),
                 user
         ));
-        return ProblemDtos.ProblemResponse.from(problem, false);
+        return ProblemDtos.ProblemResponse.from(problem, false, "NONE");
     }
 
     @Transactional
@@ -78,7 +81,7 @@ public class ProblemService {
                 sanitizeTags(request.tags(), tagCatalog),
                 blankToNull(request.source())
         );
-        return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem));
+        return response(problem, user);
     }
 
     public Problem getProblem(Long id) {
@@ -87,7 +90,7 @@ public class ProblemService {
 
     public ProblemDtos.ProblemResponse get(Long id, User user) {
         Problem problem = getProblem(id);
-        return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem));
+        return response(problem, user);
     }
 
     public List<ProblemDtos.DuplicateHint> similar(Long id, User user) {
@@ -110,7 +113,7 @@ public class ProblemService {
         if (!passedProblems.existsByUserAndProblem(user, problem)) {
             passedProblems.save(new PassedProblem(user, problem));
         }
-        return ProblemDtos.ProblemResponse.from(problem, true);
+        return response(problem, user);
     }
 
     @Transactional
@@ -124,7 +127,7 @@ public class ProblemService {
     public ProblemDtos.ProblemResponse unmarkPassed(Long id, User user) {
         Problem problem = getProblem(id);
         passedProblems.findByUserAndProblem(user, problem).ifPresent(passedProblems::delete);
-        return ProblemDtos.ProblemResponse.from(problem, false);
+        return response(problem, user);
     }
 
     @Transactional
@@ -247,6 +250,13 @@ public class ProblemService {
         int exact = (int) selectedTags.stream().filter(problem.getTags()::contains).count();
         int related = (int) problem.getTags().stream().filter(relatedTags::contains).count();
         return exact * 100 + related * 20;
+    }
+
+    private ProblemDtos.ProblemResponse response(Problem problem, User user) {
+        String dataStatus = dataSets.findStatusByProblemId(problem.getId())
+                .map(Enum::name)
+                .orElse("NONE");
+        return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem), dataStatus);
     }
 
     private static ProblemDtos.DuplicateHint duplicateHint(Problem problem, Set<String> targetTitleTokens, Set<String> targetTags) {

@@ -27,6 +27,7 @@ class AiProviderRouterTest {
                 "deepseek-chat",
                 45,
                 "codex",
+                "gpt-5.5",
                 60
         ));
         when(codexCli.assess(any(ProblemInput.class), any(AiRuntimeSettings.class)))
@@ -61,6 +62,7 @@ class AiProviderRouterTest {
                 "deepseek-chat",
                 45,
                 "codex",
+                "gpt-5.5",
                 180
         );
         when(settingsService.runtimeSettings(AiTaskType.RECOMMENDATION)).thenReturn(recommendationSettings);
@@ -92,6 +94,7 @@ class AiProviderRouterTest {
                 "deepseek-chat",
                 45,
                 "codex",
+                "gpt-5.5",
                 180
         );
         when(settingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS)).thenReturn(settings);
@@ -117,6 +120,7 @@ class AiProviderRouterTest {
                 "deepseek-chat",
                 45,
                 "codex",
+                "gpt-5.5",
                 180
         );
         when(settingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS)).thenReturn(settings);

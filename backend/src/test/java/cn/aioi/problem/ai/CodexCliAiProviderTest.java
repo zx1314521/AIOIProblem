@@ -65,6 +65,15 @@ class CodexCliAiProviderTest {
     }
 
     @Test
+    void commandLinePassesConfiguredModel(@TempDir Path tempDir) throws Exception {
+        Path output = tempDir.resolve("last-message.txt");
+
+        List<String> commandLine = CodexCliAiProvider.commandLine("codex", "gpt-5.5", output);
+
+        assertThat(commandLine).containsSubsequence("--model", "gpt-5.5", "--output-last-message", output.toString());
+    }
+
+    @Test
     void redirectsVerboseCodexOutputSoProcessCannotBlockOnStdout(@TempDir Path tempDir) throws Exception {
         Path fakeCodex = tempDir.resolve("fake-codex.cmd");
         Files.writeString(fakeCodex, """

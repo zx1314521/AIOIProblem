@@ -10,7 +10,8 @@
     "https://codeforces.com/*",
     "https://atcoder.jp/*",
     "https://www.luogu.com.cn/*",
-    "https://ac.nowcoder.com/*"
+    "https://ac.nowcoder.com/*",
+    "https://vjudge.net/*"
   ],
   "action": {
     "default_title": "AIOI OJ Import",
@@ -22,7 +23,8 @@
         "https://codeforces.com/*",
         "https://atcoder.jp/*",
         "https://www.luogu.com.cn/*",
-        "https://ac.nowcoder.com/*"
+        "https://ac.nowcoder.com/*",
+        "https://vjudge.net/*"
       ],
       "js": ["content.js"],
       "run_at": "document_idle"

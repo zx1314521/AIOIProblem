@@ -345,6 +345,43 @@ class AuthAndProblemIntegrationTest {
                 .containsExactly("题单排序 C", "题单排序 A", "题单排序 B");
     }
 
+    @Test
+    void userCanDeleteOwnedProblemSet() {
+        AuthDtos.AuthResponse auth = register("delete-set-owner");
+        HttpHeaders headers = bearer(auth.token());
+        ProblemSetDtos.ProblemSetRequest request = new ProblemSetDtos.ProblemSetRequest(
+                "Delete Set A",
+                "temporary practice set"
+        );
+        ResponseEntity<ProblemSetDtos.ProblemSetResponse> createdSet = rest.exchange(
+                "/api/problem-sets",
+                HttpMethod.POST,
+                new HttpEntity<>(request, headers),
+                ProblemSetDtos.ProblemSetResponse.class
+        );
+        assertThat(createdSet.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(createdSet.getBody()).isNotNull();
+
+        ResponseEntity<Void> deleted = rest.exchange(
+                "/api/problem-sets/" + createdSet.getBody().id(),
+                HttpMethod.DELETE,
+                new HttpEntity<>(headers),
+                Void.class
+        );
+        assertThat(deleted.getStatusCode()).isEqualTo(HttpStatus.NO_CONTENT);
+
+        ResponseEntity<ProblemSetDtos.ProblemSetResponse[]> listed = rest.exchange(
+                "/api/problem-sets",
+                HttpMethod.GET,
+                new HttpEntity<>(headers),
+                ProblemSetDtos.ProblemSetResponse[].class
+        );
+        assertThat(listed.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(listed.getBody()).isNotNull();
+        assertThat(listed.getBody()).extracting(ProblemSetDtos.ProblemSetResponse::name)
+                .doesNotContain("Delete Set A");
+    }
+
     private ProblemDtos.ProblemResponse createProblem(HttpHeaders headers, String title, Set<String> tags) {
         ProblemDtos.ProblemRequest request = new ProblemDtos.ProblemRequest(
                 title,

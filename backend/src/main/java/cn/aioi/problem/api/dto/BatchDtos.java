@@ -27,6 +27,7 @@ public final class BatchDtos {
             Long id,
             String title,
             String content,
+            String taskType,
             String status,
             int sortOrder,
             Long problemId,

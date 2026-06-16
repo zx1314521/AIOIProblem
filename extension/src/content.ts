@@ -43,6 +43,9 @@ async function hydrateStatements(items: ImportCandidate[]) {
 
 async function hydrateStatement(item: ImportCandidate): Promise<ImportCandidate> {
   if (item.statement?.trim()) return item
+  const vjudgeHydrated = await hydrateVJudgeContestProblem(item)
+  if (vjudgeHydrated?.statement?.trim()) return vjudgeHydrated
+
   const controller = new AbortController()
   const timeout = window.setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
   try {
@@ -58,6 +61,55 @@ async function hydrateStatement(item: ImportCandidate): Promise<ImportCandidate>
   } finally {
     window.clearTimeout(timeout)
   }
+}
+
+async function hydrateVJudgeContestProblem(item: ImportCandidate): Promise<ImportCandidate | null> {
+  if (item.platform !== 'VJUDGE' || !item.url.includes('/contest/') || !item.url.includes('#problem/')) {
+    return null
+  }
+
+  const frame = document.createElement('iframe')
+  frame.style.cssText = 'position:absolute;left:-10000px;top:-10000px;width:1px;height:1px;visibility:hidden;'
+  const loaded = waitForFrameLoad(frame)
+  document.body.appendChild(frame)
+  frame.src = item.url
+
+  try {
+    await loaded
+    const deadline = Date.now() + FETCH_TIMEOUT_MS
+    while (Date.now() < deadline) {
+      const parsed = parseFrame(frame, item.url)
+      const problem = parsed?.items.find(candidate => candidate.sourceId === item.sourceId)
+      if (problem?.statement?.trim()) {
+        return { ...problem, passed: item.passed || problem.passed }
+      }
+      await delay(350)
+    }
+    return item
+  } catch {
+    return item
+  } finally {
+    frame.remove()
+  }
+}
+
+function parseFrame(frame: HTMLIFrameElement, url: string) {
+  const frameDocument = frame.contentDocument
+  return frameDocument ? parseCurrentPage(frameDocument, url) : null
+}
+
+function waitForFrameLoad(frame: HTMLIFrameElement) {
+  return new Promise<void>((resolve, reject) => {
+    const timeout = window.setTimeout(() => reject(new Error('VJudge problem frame load timeout')), FETCH_TIMEOUT_MS)
+    frame.addEventListener('load', () => {
+      window.clearTimeout(timeout)
+      resolve()
+    }, { once: true })
+  })
+}
+
+function delay(ms: number) {
+  return new Promise(resolve => window.setTimeout(resolve, ms))
 }
 
 function errorMessage(error: unknown) {

@@ -1,11 +1,39 @@
 import { authState, clearAuth } from './auth'
-import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, DuplicateHint, OjImportHistoryJob, Problem, ProblemSet, RecommendationResponse, TagCatalog } from '../types'
+import type { AiSettings, AnalysisResponse, AuthResponse, BatchItem, BatchJob, BatchJobDetail, CodeRunRequest, CodeRunResponse, DuplicateHint, OjImportHistoryJob, Problem, ProblemDataSet, ProblemDataStatus, ProblemSet, RecommendationResponse, TagCatalog } from '../types'
 
-async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
+type RequestBehavior = {
+  clearAuthOnUnauthorized?: boolean
+  unauthorizedMessage?: string
+}
+
+async function request<T>(path: string, options: RequestInit = {}, behavior: RequestBehavior = {}): Promise<T> {
+  const clearOnUnauthorized = behavior.clearAuthOnUnauthorized ?? true
   const headers = new Headers(options.headers)
   if (!(options.body instanceof FormData)) {
     headers.set('Content-Type', 'application/json')
   }
+  if (authState.token) {
+    headers.set('Authorization', `Bearer ${authState.token}`)
+  }
+  const response = await fetch(path, { ...options, headers })
+  if (response.status === 401 && clearOnUnauthorized) {
+    clearAuth()
+  }
+  if (!response.ok) {
+    const text = await response.text()
+    if (response.status === 401 && behavior.unauthorizedMessage) {
+      throw new Error(behavior.unauthorizedMessage)
+    }
+    throw new Error(errorMessage(text, response.statusText))
+  }
+  if (response.status === 204) {
+    return undefined as T
+  }
+  return response.json() as Promise<T>
+}
+
+async function requestBlob(path: string, options: RequestInit = {}): Promise<Blob> {
+  const headers = new Headers(options.headers)
   if (authState.token) {
     headers.set('Authorization', `Bearer ${authState.token}`)
   }
@@ -17,10 +45,7 @@ async function request<T>(path: string, options: RequestInit = {}): Promise<T> {
     const text = await response.text()
     throw new Error(errorMessage(text, response.statusText))
   }
-  if (response.status === 204) {
-    return undefined as T
-  }
-  return response.json() as Promise<T>
+  return response.blob()
 }
 
 function errorMessage(text: string, fallback: string) {
@@ -61,11 +86,31 @@ export const api = {
     request<void>('/api/problems/bulk', { method: 'DELETE', body: JSON.stringify({ problemIds }) }),
   reanalyzeProblems: (problemIds: number[]) =>
     request<BatchJobDetail>('/api/problems/reanalyze', { method: 'POST', body: JSON.stringify({ problemIds }) }),
+  getProblemDataStatus: (id: number) => request<ProblemDataStatus>(`/api/problems/${id}/data/status`),
+  getProblemData: (id: number) => request<ProblemDataSet>(`/api/problems/${id}/data`),
+  generateProblemData: (id: number) =>
+    request<ProblemDataStatus>(`/api/problems/${id}/data/generate`, { method: 'POST' }, {
+      clearAuthOnUnauthorized: false,
+      unauthorizedMessage: 'AI 数据生成启动失败：登录状态无效，请刷新页面或重新登录。'
+    }),
+  addProblemDataCase: (id: number, testCase: { index: number; input: string; output: string }) =>
+    request<ProblemDataSet>(`/api/problems/${id}/data/cases`, { method: 'POST', body: JSON.stringify(testCase) }),
+  updateProblemDataCase: (id: number, caseId: number, testCase: { index: number; input: string; output: string }) =>
+    request<ProblemDataSet>(`/api/problems/${id}/data/cases/${caseId}`, { method: 'PUT', body: JSON.stringify(testCase) }),
+  deleteProblemDataCase: (id: number, caseId: number) =>
+    request<ProblemDataSet>(`/api/problems/${id}/data/cases/${caseId}`, { method: 'DELETE' }),
+  downloadProblemData: (id: number) => requestBlob(`/api/problems/${id}/data/download`),
+  runProblemDebug: (id: number, payload: CodeRunRequest) =>
+    request<CodeRunResponse>(`/api/problems/${id}/run/debug`, { method: 'POST', body: JSON.stringify(payload) }),
+  runProblemCases: (id: number, payload: CodeRunRequest) =>
+    request<CodeRunResponse>(`/api/problems/${id}/run/cases`, { method: 'POST', body: JSON.stringify(payload) }),
   listProblemSets: () => request<ProblemSet[]>('/api/problem-sets'),
   createProblemSet: (name: string, description: string) =>
     request<ProblemSet>('/api/problem-sets', { method: 'POST', body: JSON.stringify({ name, description }) }),
   createProblemSetWithProblems: (name: string, description: string, problemIds: number[]) =>
     request<ProblemSet>('/api/problem-sets/with-problems', { method: 'POST', body: JSON.stringify({ name, description, problemIds }) }),
+  deleteProblemSet: (setId: number) =>
+    request<void>(`/api/problem-sets/${setId}`, { method: 'DELETE' }),
   addProblemToSet: (setId: number, problemId: number) =>
     request<ProblemSet>(`/api/problem-sets/${setId}/items`, { method: 'POST', body: JSON.stringify({ problemId }) }),
   addProblemsToSet: (setId: number, problemIds: number[]) =>

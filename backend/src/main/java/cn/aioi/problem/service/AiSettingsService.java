@@ -34,11 +34,13 @@ public class AiSettingsService {
                 defaultProvider,
                 normalizeProvider(defaultString(request.problemAnalysisProvider(), defaultProvider)),
                 normalizeProvider(defaultString(request.recommendationProvider(), defaultProvider)),
+                normalizeProvider(defaultString(request.dataGenerationProvider(), "codex")),
                 clean(request.deepSeekApiKey()),
                 defaultString(request.deepSeekBaseUrl(), defaultDeepSeekBaseUrl()),
                 defaultString(request.deepSeekModel(), defaultDeepSeekModel()),
                 request.deepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : request.deepSeekTimeoutSeconds(),
                 defaultString(request.codexCommand(), defaultCodexCommand()),
+                defaultString(request.codexModel(), defaultCodexModel()),
                 request.codexTimeoutSeconds() == null ? defaultCodexTimeout() : request.codexTimeoutSeconds()
         );
         return toResponse(settingsRepository.save(settings));
@@ -60,6 +62,7 @@ public class AiSettingsService {
                 defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
                 settings.getDeepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : settings.getDeepSeekTimeoutSeconds(),
                 defaultString(settings.getCodexCommand(), defaultCodexCommand()),
+                defaultString(settings.getCodexModel(), defaultCodexModel()),
                 settings.getCodexTimeoutSeconds() == null ? defaultCodexTimeout() : settings.getCodexTimeoutSeconds()
         );
     }
@@ -86,17 +89,20 @@ public class AiSettingsService {
                 defaultString(settings.getDeepSeekModel(), defaultDeepSeekModel()),
                 settings.getDeepSeekTimeoutSeconds() == null ? defaultDeepSeekTimeout() : settings.getDeepSeekTimeoutSeconds(),
                 defaultString(settings.getCodexCommand(), defaultCodexCommand()),
+                defaultString(settings.getCodexModel(), defaultCodexModel()),
                 settings.getCodexTimeoutSeconds() == null ? defaultCodexTimeout() : settings.getCodexTimeoutSeconds()
         );
         return new SettingsDtos.AiSettingsResponse(
                 runtime.provider(),
                 normalizeProvider(defaultString(settings.getProblemAnalysisProvider(), defaultProvider)),
                 normalizeProvider(defaultString(settings.getRecommendationProvider(), defaultProvider)),
+                normalizeProvider(defaultString(settings.getDataGenerationProvider(), "codex")),
                 runtime.deepSeekApiKey(),
                 runtime.deepSeekBaseUrl(),
                 runtime.deepSeekModel(),
                 runtime.deepSeekTimeoutSeconds(),
                 runtime.codexCommand(),
+                runtime.codexModel(),
                 runtime.codexTimeoutSeconds()
         );
     }
@@ -106,6 +112,7 @@ public class AiSettingsService {
         String configured = switch (taskType) {
             case PROBLEM_ANALYSIS -> settings.getProblemAnalysisProvider();
             case RECOMMENDATION -> settings.getRecommendationProvider();
+            case DATA_GENERATION -> settings.getDataGenerationProvider();
         };
         return normalizeProvider(defaultString(configured, defaultProvider));
     }
@@ -136,6 +143,10 @@ public class AiSettingsService {
 
     private String defaultCodexCommand() {
         return properties.codex() == null ? "codex" : defaultString(properties.codex().command(), "codex");
+    }
+
+    private String defaultCodexModel() {
+        return properties.codex() == null ? "gpt-5.5" : defaultString(properties.codex().model(), "gpt-5.5");
     }
 
     private int defaultCodexTimeout() {

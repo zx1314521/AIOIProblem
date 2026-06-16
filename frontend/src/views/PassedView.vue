@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { Search } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem } from '../types'
@@ -40,7 +41,16 @@ onMounted(load)
     <div class="problem-list">
       <article v-for="problem in passed" :key="problem.id" class="problem-row">
         <header>
-          <h3>{{ problem.title }}</h3>
+          <h3>
+            <RouterLink
+              class="problem-title-link"
+              :to="`/problems/${problem.id}`"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              {{ problem.title }}
+            </RouterLink>
+          </h3>
           <span class="difficulty">{{ problem.difficulty }}</span>
         </header>
         <div class="tag-row">
@@ -52,3 +62,15 @@ onMounted(load)
   </section>
 </template>
 
+<style scoped>
+.problem-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.problem-title-link:hover,
+.problem-title-link:focus-visible {
+  color: #2475b9;
+  text-decoration: underline;
+}
+</style>

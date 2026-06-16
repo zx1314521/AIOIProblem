@@ -34,7 +34,8 @@ public class CodexCliAiProvider {
             }
             outputFile = Files.createTempFile("aioi-codex-", ".txt");
             logFile = Files.createTempFile("aioi-codex-log-", ".txt");
-            Process process = startProcess(command, prompt(input), outputFile, logFile);
+            String model = properties.codex() == null ? "" : properties.codex().model();
+            Process process = startProcess(command, model, prompt(input), outputFile, logFile);
             boolean finished = process.waitFor(properties.codex().timeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
@@ -63,7 +64,7 @@ public class CodexCliAiProvider {
             }
             outputFile = Files.createTempFile("aioi-codex-", ".txt");
             logFile = Files.createTempFile("aioi-codex-log-", ".txt");
-            Process process = startProcess(command, prompt(input), outputFile, logFile);
+            Process process = startProcess(command, settings.codexModel(), prompt(input), outputFile, logFile);
             boolean finished = process.waitFor(settings.codexTimeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
@@ -92,7 +93,7 @@ public class CodexCliAiProvider {
             }
             outputFile = Files.createTempFile("aioi-codex-polish-", ".txt");
             logFile = Files.createTempFile("aioi-codex-polish-log-", ".txt");
-            Process process = startProcess(command, polishPrompt(input), outputFile, logFile);
+            Process process = startProcess(command, settings.codexModel(), polishPrompt(input), outputFile, logFile);
             boolean finished = process.waitFor(settings.codexTimeoutSeconds(), TimeUnit.SECONDS);
             if (!finished) {
                 process.destroyForcibly();
@@ -104,6 +105,34 @@ public class CodexCliAiProvider {
             return readCodexOutput(outputFile, logFile).trim();
         } catch (Exception exception) {
             throw new IllegalStateException("Codex CLI statement polishing failed: " + exception.getMessage(), exception);
+        } finally {
+            deleteIfExists(outputFile);
+            deleteIfExists(logFile);
+        }
+    }
+
+    public String generateTestData(ProblemInput input, AiRuntimeSettings settings) {
+        Path outputFile = null;
+        Path logFile = null;
+        try {
+            String command = settings.codexCommand();
+            if (command == null || command.isBlank()) {
+                throw new IllegalStateException("Codex CLI command is not configured");
+            }
+            outputFile = Files.createTempFile("aioi-codex-testdata-", ".txt");
+            logFile = Files.createTempFile("aioi-codex-testdata-log-", ".txt");
+            Process process = startProcess(command, settings.codexModel(), testDataPrompt(input), outputFile, logFile);
+            boolean finished = process.waitFor(settings.codexTimeoutSeconds(), TimeUnit.SECONDS);
+            if (!finished) {
+                process.destroyForcibly();
+                throw new IllegalStateException("Codex CLI timed out: " + logTail(logFile));
+            }
+            if (process.exitValue() != 0) {
+                throw new IllegalStateException("Codex CLI exited with " + process.exitValue() + ": " + logTail(logFile));
+            }
+            return readCodexOutput(outputFile, logFile).trim();
+        } catch (Exception exception) {
+            throw new IllegalStateException("Codex CLI test data generation failed: " + exception.getMessage(), exception);
         } finally {
             deleteIfExists(outputFile);
             deleteIfExists(logFile);
@@ -131,8 +160,28 @@ public class CodexCliAiProvider {
                 """ + input.title() + "\n\nRaw statement:\n" + input.text();
     }
 
-    private Process startProcess(String command, String prompt, Path outputFile, Path logFile) throws java.io.IOException {
-        Process process = new ProcessBuilder(commandLine(command, outputFile))
+    private String testDataPrompt(ProblemInput input) {
+        return """
+                You are generating competitive-programming test data for an existing problem.
+                Follow the ojimport "only generate test data" workflow:
+                - Infer input format, output format, constraints, time/memory intent, and algorithm type from the statement.
+                - Produce a correct C++17 reference solution as stdCpp.
+                - Produce exactly 25 paired test cases.
+                - Cases 1-2 should be samples when present, otherwise minimal valid cases.
+                - Cases 3-8 cover small scale and boundary properties.
+                - Cases 9-11 are hack cases for common wrong solutions.
+                - Cases 12-20 cover medium/large stress.
+                - Cases 21-25 are mixed random regression cases.
+                - Produce configYaml with type/time/memory and all cases.
+                Output JSON only, no Markdown, with this exact shape:
+                {"stdCpp":"","configYaml":"","notes":"","cases":[{"index":1,"input":"","output":""}]}
+                The cases array must contain indexes 1 through 25 exactly once.
+                Title:
+                """ + input.title() + "\n\nStatement:\n" + input.text();
+    }
+
+    private Process startProcess(String command, String model, String prompt, Path outputFile, Path logFile) throws java.io.IOException {
+        Process process = new ProcessBuilder(commandLine(command, model, outputFile))
                 .redirectErrorStream(true)
                 .redirectOutput(logFile.toFile())
                 .start();
@@ -176,6 +225,10 @@ public class CodexCliAiProvider {
     }
 
     static List<String> commandLine(String command, Path outputFile) {
+        return commandLine(command, "", outputFile);
+    }
+
+    static List<String> commandLine(String command, String model, Path outputFile) {
         List<String> args = new ArrayList<>();
         args.add(resolveExecutable(command));
         args.add("exec");
@@ -183,6 +236,10 @@ public class CodexCliAiProvider {
         args.add("--skip-git-repo-check");
         args.add("--color");
         args.add("never");
+        if (model != null && !model.isBlank()) {
+            args.add("--model");
+            args.add(model.trim());
+        }
         args.add("--output-last-message");
         args.add(outputFile.toString());
         args.add("-");

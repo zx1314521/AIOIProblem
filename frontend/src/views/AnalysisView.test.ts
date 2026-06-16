@@ -127,6 +127,33 @@ const completedArchiveJob: BatchJobDetail = {
   ]
 }
 
+const dataGenerationJob: BatchJobDetail = {
+  job: {
+    id: 4,
+    name: 'AI数据生成',
+    status: 'RUNNING',
+    totalCount: 1,
+    successCount: 0,
+    failedCount: 0,
+    pendingCount: 1,
+    runningCount: 0,
+    createdAt: '2026-05-25T00:00:00'
+  },
+  items: [
+    {
+      id: 41,
+      title: 'A+B',
+      content: 'Read two integers.',
+      taskType: 'DATA_GENERATION',
+      status: 'PENDING',
+      sortOrder: 0,
+      problemId: 1,
+      tags: ['模拟'],
+      createdAt: '2026-05-25T00:00:00'
+    }
+  ]
+}
+
 beforeEach(() => {
   vi.useRealTimers()
   vi.clearAllMocks()
@@ -203,6 +230,21 @@ test('shows items from older import batches in the same task rail', async () => 
   expect(within(queue).getByRole('button', { name: /Pending problem/ })).toBeTruthy()
   expect(within(queue).getByRole('button', { name: /Old visible problem/ })).toBeTruthy()
   expect(screen.getByRole('button', { name: /全部 6/ })).toBeTruthy()
+})
+
+test('distinguishes analysis and data generation tasks', async () => {
+  vi.mocked(api.listBatchJobs).mockResolvedValue([dataGenerationJob.job, mixedJob.job])
+  vi.mocked(api.getBatchJob).mockImplementation(async (id: number) => {
+    if (id === dataGenerationJob.job.id) return dataGenerationJob
+    if (id === mixedJob.job.id) return mixedJob
+    throw new Error('missing job')
+  })
+
+  render(AnalysisView)
+
+  await screen.findByRole('button', { name: /A\+B/ })
+  expect(screen.getAllByText('造数据').length).toBeGreaterThan(0)
+  expect(screen.getAllByText('题目分析').length).toBeGreaterThan(0)
 })
 
 test('keeps the selected completed job visible after polling', async () => {

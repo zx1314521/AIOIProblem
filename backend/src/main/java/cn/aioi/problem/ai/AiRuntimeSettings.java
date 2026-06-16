@@ -7,6 +7,7 @@ public record AiRuntimeSettings(
         String deepSeekModel,
         int deepSeekTimeoutSeconds,
         String codexCommand,
+        String codexModel,
         int codexTimeoutSeconds
 ) {
     public String providerLabel() {

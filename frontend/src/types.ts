@@ -23,6 +23,7 @@ export interface Problem {
   sourceUrl?: string
   createdAt: string
   passed: boolean
+  dataStatus?: 'NONE' | 'GENERATING' | 'READY' | 'FAILED'
 }
 
 export interface AnalysisResponse {
@@ -88,11 +89,13 @@ export interface AiSettings {
   provider: 'codex' | 'deepseek' | 'mock'
   problemAnalysisProvider: 'codex' | 'deepseek' | 'mock'
   recommendationProvider: 'codex' | 'deepseek' | 'mock'
+  dataGenerationProvider: 'codex' | 'deepseek' | 'mock'
   deepSeekApiKey: string
   deepSeekBaseUrl: string
   deepSeekModel: string
   deepSeekTimeoutSeconds: number
   codexCommand: string
+  codexModel: string
   codexTimeoutSeconds: number
 }
 
@@ -112,6 +115,7 @@ export interface BatchItem {
   id: number
   title: string
   content: string
+  taskType?: 'PROBLEM_ANALYSIS' | 'DATA_GENERATION'
   status: 'PENDING' | 'RUNNING' | 'SUCCEEDED' | 'FAILED'
   sortOrder: number
   problemId?: number
@@ -156,4 +160,57 @@ export interface OjImportHistoryItem {
 
 export interface OjImportHistoryJob extends BatchJob {
   items: OjImportHistoryItem[]
+}
+
+export interface ProblemDataStatus {
+  id?: number
+  problemId: number
+  status: 'NONE' | 'GENERATING' | 'READY' | 'FAILED'
+  caseCount: number
+  errorMessage?: string
+  notes?: string
+  updatedAt?: string
+}
+
+export interface ProblemDataCase {
+  id: number
+  index: number
+  input: string
+  output: string
+}
+
+export interface ProblemDataSet {
+  id?: number
+  problemId: number
+  status: 'NONE' | 'GENERATING' | 'READY' | 'FAILED'
+  stdCpp: string
+  configYaml: string
+  errorMessage?: string
+  notes?: string
+  updatedAt?: string
+  cases: ProblemDataCase[]
+}
+
+export interface CodeRunRequest {
+  code: string
+  input?: string
+  caseIndexes?: number[]
+}
+
+export interface CaseRunResponse {
+  index: number
+  status: 'AC' | 'WA' | 'RE' | 'TLE'
+  stdout: string
+  stderr: string
+  expectedOutput: string
+  durationMs: number
+}
+
+export interface CodeRunResponse {
+  status: 'OK' | 'AC' | 'WA' | 'RE' | 'TLE' | 'CE'
+  stdout: string
+  stderr: string
+  exitCode?: number
+  durationMs: number
+  cases: CaseRunResponse[]
 }

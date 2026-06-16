@@ -105,6 +105,74 @@ describe('OJ page parsers', () => {
     expect(result.items[0].statement).toContain('输出方案数')
   })
 
+  test('parses VJudge direct problem pages', () => {
+    const result = parseCurrentPage(doc(`
+      <div id="prob-title">ICP Company <span class="origin">TLX - compfest-7-scpc-final-D</span></div>
+      <div id="frame-description-container">
+        <h3>Description</h3>
+        <p>Anda bekerja di International Computer-based Problem-solving Company.</p>
+        <h3>Input</h3>
+        <p>Baris pertama terdiri dari T.</p>
+      </div>
+    `), 'https://vjudge.net/problem/TLX-compfest-7-scpc-final-D')
+
+    expect(result.kind).toBe('problem')
+    expect(result.items[0]).toMatchObject({
+      platform: 'VJUDGE',
+      sourceId: 'VJTLX-compfest-7-scpc-final-D',
+      title: 'ICP Company TLX - compfest-7-scpc-final-D',
+      passed: false
+    })
+    expect(result.items[0].statement).toContain('International Computer-based')
+  })
+
+  test('parses VJudge contest problem pages', () => {
+    const result = parseCurrentPage(doc(`
+      <div id="prob-title-contest">D - 股票交易</div>
+      <div id="frame-description-container">
+        <h3>Description</h3>
+        <p>最近 lxhgww 又迷上了投资股票。</p>
+      </div>
+    `), 'https://vjudge.net/contest/822927#problem/D')
+
+    expect(result.kind).toBe('problem')
+    expect(result.items[0]).toMatchObject({
+      platform: 'VJUDGE',
+      sourceId: 'VJ822927D',
+      title: 'D - 股票交易',
+      url: 'https://vjudge.net/contest/822927#problem/D'
+    })
+    expect(result.items[0].statement).toContain('投资股票')
+  })
+
+  test('parses VJudge contest overview problem links', () => {
+    const result = parseCurrentPage(doc(`
+      <table id="contest-problems">
+        <tr><th>#</th><th>标题</th></tr>
+        <tr><td>A</td><td><a href="#problem/A">笛卡尔树</a></td><td>已解决</td></tr>
+        <tr><td>D</td><td><a href="#problem/D">股票交易</a></td><td>1 / 1</td></tr>
+      </table>
+    `), 'https://vjudge.net/contest/822927#overview')
+
+    expect(result.kind).toBe('submissions')
+    expect(result.items).toEqual([
+      {
+        platform: 'VJUDGE',
+        sourceId: 'VJ822927A',
+        title: 'A - 笛卡尔树',
+        url: 'https://vjudge.net/contest/822927#problem/A',
+        passed: true
+      },
+      {
+        platform: 'VJUDGE',
+        sourceId: 'VJ822927D',
+        title: 'D - 股票交易',
+        url: 'https://vjudge.net/contest/822927#problem/D',
+        passed: false
+      }
+    ])
+  })
+
   test('deduplicates submission pages and marks accepted problems as passed', () => {
     const result = parseCurrentPage(doc(`
       <table class="status-frame-datatable">

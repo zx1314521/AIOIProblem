@@ -2,7 +2,14 @@ import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import ProblemsView from './ProblemsView.vue'
 import { api } from '../services/api'
+import { resetProblemListCacheForTests } from '../services/problemListCache'
 import type { Problem, TagCatalog } from '../types'
+
+const push = vi.fn()
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push })
+}))
 
 vi.mock('../services/api', () => ({
   api: {
@@ -88,8 +95,25 @@ const searchProblems: Problem[] = [
 ]
 
 beforeEach(() => {
+  vi.clearAllMocks()
+  resetProblemListCacheForTests()
+  push.mockReset()
+  vi.spyOn(window, 'open').mockImplementation(() => null)
   vi.mocked(api.getTags).mockResolvedValue(catalog)
 })
+
+function makeProblem(id: number): Problem {
+  return {
+    id,
+    title: `题目 ${id}`,
+    description: `题面 ${id}`,
+    difficulty: id % 2 === 0 ? '简单' : 'NOIP困难',
+    difficultyCode: id % 2 === 0 ? 'EASY' : 'NOIP_HARD',
+    tags: id % 2 === 0 ? ['模拟'] : ['最短路'],
+    createdAt: `2026-05-24T00:00:${String(id).padStart(2, '0')}`,
+    passed: false
+  }
+}
 
 test('manages problems with sorting and create dialog', async () => {
   vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
@@ -101,6 +125,9 @@ test('manages problems with sorting and create dialog', async () => {
     const titles = Array.from(document.querySelectorAll('.problem-row h3')).map(node => node.textContent)
     expect(titles).toEqual(['B 新题', 'A 旧题'])
   })
+  expect(screen.getByText('数据')).toBeTruthy()
+  expect(screen.getAllByText('AI数据').length).toBeGreaterThan(0)
+  expect(screen.queryByText('????')).toBeNull()
   expect(screen.queryByText('旧题面')).toBeNull()
 
   await userEvent.click(screen.getByText('倒序'))
@@ -109,12 +136,9 @@ test('manages problems with sorting and create dialog', async () => {
     expect(titles).toEqual(['A 旧题', 'B 新题'])
   })
 
-  vi.mocked(api.getProblem).mockResolvedValue(sampleProblems[0])
   await userEvent.click(screen.getByText('A 旧题'))
-  expect(await screen.findByRole('dialog')).toBeTruthy()
-  expect(await screen.findByText('旧题面')).toBeTruthy()
+  expect(window.open).toHaveBeenCalledWith('#/problems/1', '_blank', 'noopener,noreferrer')
 
-  await userEvent.click(screen.getByTitle('关闭'))
   await userEvent.click(screen.getByText('新建题目'))
   expect(screen.getByRole('dialog')).toBeTruthy()
   expect(screen.getByPlaceholderText('题面描述')).toBeTruthy()
@@ -146,9 +170,9 @@ test('loads tag catalog and searches by multiple standard tags with relevance fi
   await userEvent.click(screen.getByRole('button', { name: /搜索/ }))
 
   await waitFor(() => {
-    expect(api.searchProblems).toHaveBeenLastCalledWith(new URLSearchParams('tags=%E6%9C%80%E7%9F%AD%E8%B7%AF&tags=%E7%BD%91%E7%BB%9C%E6%B5%81'))
+    expect(api.searchProblems).toHaveBeenCalledTimes(1)
     const titles = Array.from(document.querySelectorAll('.problem-row h3')).map(node => node.textContent)
-    expect(titles).toEqual(['完全匹配', '部分匹配', '同类相关'])
+    expect(titles).toEqual(['完全匹配'])
   })
 })
 
@@ -300,4 +324,35 @@ test('creates a new problem set from selected problems', async () => {
   await waitFor(() => {
     expect(api.createProblemSetWithProblems).toHaveBeenCalledWith('新题单', '题目管理批量创建', [1])
   })
+})
+
+test('reuses loaded problems when returning to problem management', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(sampleProblems)
+
+  const first = render(ProblemsView)
+  expect(await screen.findByText('B 新题')).toBeTruthy()
+  first.unmount()
+
+  render(ProblemsView)
+  expect(await screen.findByText('B 新题')).toBeTruthy()
+
+  expect(api.searchProblems).toHaveBeenCalledTimes(1)
+})
+
+test('paginates cached problems at 50 problems per page', async () => {
+  vi.mocked(api.searchProblems).mockResolvedValue(Array.from({ length: 51 }, (_, index) => makeProblem(index + 1)))
+
+  render(ProblemsView)
+
+  await screen.findByText('题目 51')
+  expect(document.querySelectorAll('.problem-row-compact')).toHaveLength(50)
+  expect(screen.queryByText('题目 1')).toBeNull()
+  expect(screen.getByText('第 1 / 2 页')).toBeTruthy()
+
+  await userEvent.click(screen.getByRole('button', { name: '下一页' }))
+
+  await waitFor(() => {
+    expect(document.querySelectorAll('.problem-row-compact')).toHaveLength(1)
+  })
+  expect(screen.getByText('题目 1')).toBeTruthy()
 })

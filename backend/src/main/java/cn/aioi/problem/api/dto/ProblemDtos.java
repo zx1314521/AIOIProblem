@@ -68,9 +68,14 @@ public final class ProblemDtos {
             String externalSourceId,
             String sourceUrl,
             Instant createdAt,
-            boolean passed
+            boolean passed,
+            String dataStatus
     ) {
         public static ProblemResponse from(Problem problem, boolean passed) {
+            return from(problem, passed, "NONE");
+        }
+
+        public static ProblemResponse from(Problem problem, boolean passed, String dataStatus) {
             DifficultyLevel difficulty = problem.getDifficulty();
             return new ProblemResponse(
                     problem.getId(),
@@ -84,7 +89,8 @@ public final class ProblemDtos {
                     problem.getExternalSourceId(),
                     problem.getSourceUrl(),
                     problem.getCreatedAt(),
-                    passed
+                    passed,
+                    dataStatus == null ? "NONE" : dataStatus
             );
         }
     }

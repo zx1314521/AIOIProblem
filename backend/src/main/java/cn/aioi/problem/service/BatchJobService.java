@@ -4,18 +4,24 @@ import cn.aioi.problem.ai.AiAssessment;
 import cn.aioi.problem.ai.AiProvider;
 import cn.aioi.problem.ai.AiRuntimeSettings;
 import cn.aioi.problem.ai.AiTaskType;
+import cn.aioi.problem.ai.CodexCliAiProvider;
 import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.api.dto.BatchDtos;
+import cn.aioi.problem.api.dto.ProblemDataDtos;
 import cn.aioi.problem.domain.BatchItemStatus;
+import cn.aioi.problem.domain.BatchItemTaskType;
 import cn.aioi.problem.domain.BatchJob;
 import cn.aioi.problem.domain.BatchJobItem;
 import cn.aioi.problem.domain.BatchJobStatus;
 import cn.aioi.problem.domain.PassedProblem;
 import cn.aioi.problem.domain.Problem;
+import cn.aioi.problem.domain.ProblemDataCase;
+import cn.aioi.problem.domain.ProblemDataSet;
 import cn.aioi.problem.domain.User;
 import cn.aioi.problem.repository.BatchJobItemRepository;
 import cn.aioi.problem.repository.BatchJobRepository;
 import cn.aioi.problem.repository.PassedProblemRepository;
+import cn.aioi.problem.repository.ProblemDataSetRepository;
 import cn.aioi.problem.repository.ProblemRepository;
 import cn.aioi.problem.repository.UserRepository;
 import jakarta.annotation.PostConstruct;
@@ -50,16 +56,20 @@ public class BatchJobService {
     private final PassedProblemRepository passedProblems;
     private final UserRepository users;
     private final AiProvider aiProvider;
+    private final CodexCliAiProvider codexCli;
     private final AiSettingsService aiSettingsService;
     private final TagCatalogService tagCatalog;
+    private final ProblemDataSetRepository dataSets;
+    private final ProblemDataGenerationParser dataGenerationParser;
     private final TransactionTemplate transactionTemplate;
     private final ExecutorService executor = Executors.newSingleThreadExecutor();
     private final AtomicBoolean workerRunning = new AtomicBoolean(false);
 
     public BatchJobService(BatchJobRepository jobs, BatchJobItemRepository items, ProblemRepository problems,
                            PassedProblemRepository passedProblems, UserRepository users,
-                           AiProvider aiProvider, AiSettingsService aiSettingsService,
-                           TagCatalogService tagCatalog,
+                           AiProvider aiProvider, CodexCliAiProvider codexCli, AiSettingsService aiSettingsService,
+                           TagCatalogService tagCatalog, ProblemDataSetRepository dataSets,
+                           ProblemDataGenerationParser dataGenerationParser,
                            PlatformTransactionManager transactionManager) {
         this.jobs = jobs;
         this.items = items;
@@ -67,8 +77,11 @@ public class BatchJobService {
         this.passedProblems = passedProblems;
         this.users = users;
         this.aiProvider = aiProvider;
+        this.codexCli = codexCli;
         this.aiSettingsService = aiSettingsService;
         this.tagCatalog = tagCatalog;
+        this.dataSets = dataSets;
+        this.dataGenerationParser = dataGenerationParser;
         this.transactionTemplate = new TransactionTemplate(transactionManager);
     }
 
@@ -163,6 +176,20 @@ public class BatchJobService {
                     problem.getId()
             ));
         }
+        triggerWorkerAfterCommit();
+        return detail(job.getId(), user);
+    }
+
+    @Transactional
+    public BatchDtos.BatchJobDetailResponse enqueueDataGeneration(Problem problem, User user) {
+        BatchJob job = jobs.save(new BatchJob("AI数据生成", user, 1));
+        items.save(BatchJobItem.dataGeneration(
+                job,
+                ProblemTextNormalizer.normalizeNamesAndTrim(problem.getTitle()),
+                ProblemTextNormalizer.normalizeNamesAndTrim(problem.getDescription()),
+                0,
+                problem.getId()
+        ));
         triggerWorkerAfterCommit();
         return detail(job.getId(), user);
     }
@@ -275,6 +302,7 @@ public class BatchJobService {
                     item.getId(),
                     item.getJob().getId(),
                     item.getJob().getOwner().getId(),
+                    item.getTaskType(),
                     ProblemTextNormalizer.normalizeNamesAndTrim(targetProblem.map(Problem::getTitle).orElse(item.getTitle())),
                     ProblemTextNormalizer.normalizeNamesAndTrim(targetProblem.map(Problem::getDescription).orElse(item.getContent())),
                     targetProblemId,
@@ -287,9 +315,16 @@ public class BatchJobService {
         if (workItem == null) {
             return;
         }
-        AiRuntimeSettings runtime = aiSettingsService.runtimeSettings(AiTaskType.PROBLEM_ANALYSIS);
+        AiTaskType aiTaskType = workItem.taskType() == BatchItemTaskType.DATA_GENERATION
+                ? AiTaskType.DATA_GENERATION
+                : AiTaskType.PROBLEM_ANALYSIS;
+        AiRuntimeSettings runtime = aiSettingsService.runtimeSettings(aiTaskType);
         long started = System.nanoTime();
         try {
+            if (workItem.taskType() == BatchItemTaskType.DATA_GENERATION) {
+                processDataGeneration(workItem, runtime, started);
+                return;
+            }
             if (workItem.reanalysisProblemId() == null && completeExistingExternalImport(workItem)) {
                 return;
             }
@@ -339,12 +374,60 @@ public class BatchJobService {
         } catch (RuntimeException exception) {
             long durationMs = elapsedMs(started);
             transactionTemplate.executeWithoutResult(status -> {
-                BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
+                Optional<BatchJobItem> itemOptional = items.findById(workItem.itemId());
+                if (itemOptional.isEmpty()) {
+                    return;
+                }
+                if (workItem.taskType() == BatchItemTaskType.DATA_GENERATION) {
+                    markDataGenerationFailed(workItem.reanalysisProblemId(), exception.getMessage());
+                }
+                BatchJobItem item = itemOptional.get();
                 item.fail(exception.getMessage(), runtime.providerLabel(), modelLabel(runtime), durationMs);
                 item.getJob().incrementFailed();
                 completeJobIfDone(item.getJob());
             });
         }
+    }
+
+    private void processDataGeneration(WorkItem workItem, AiRuntimeSettings runtime, long started) {
+        if (!"codex".equals(runtime.provider())) {
+            throw new IllegalStateException("AI 数据生成需要使用 Codex CLI");
+        }
+        String output = codexCli.generateTestData(new ProblemInput(workItem.title(), workItem.content()), runtime);
+        ProblemDataDtos.GeneratedData generated = dataGenerationParser.parse(output);
+        long durationMs = elapsedMs(started);
+        transactionTemplate.executeWithoutResult(status -> {
+            BatchJobItem item = items.findById(workItem.itemId()).orElseThrow();
+            Problem problem = problems.findById(workItem.reanalysisProblemId())
+                    .orElseThrow(() -> new EntityNotFoundException("题目不存在"));
+            ProblemDataSet dataSet = dataSets.findByProblem(problem).orElseGet(() -> dataSets.save(new ProblemDataSet(problem)));
+            List<ProblemDataCase> cases = generated.cases().stream()
+                    .sorted(java.util.Comparator.comparingInt(ProblemDataDtos.GeneratedCase::index))
+                    .map(testCase -> new ProblemDataCase(dataSet, testCase.index(), testCase.input(), testCase.output()))
+                    .toList();
+            dataSet.replaceGeneratedData(generated.stdCpp(), generated.configYaml(), generated.notes(), cases);
+            item.completeAnalysisMetadata(
+                    runtime.providerLabel(),
+                    modelLabel(runtime),
+                    1.0,
+                    generated.notes() == null || generated.notes().isBlank() ? "AI 数据生成完成。" : generated.notes(),
+                    "",
+                    durationMs
+            );
+            item.succeed(problem.getId());
+            item.getJob().incrementSuccess();
+            completeJobIfDone(item.getJob());
+        });
+    }
+
+    private void markDataGenerationFailed(Long problemId, String message) {
+        if (problemId == null) {
+            return;
+        }
+        problems.findById(problemId).ifPresent(problem -> {
+            ProblemDataSet dataSet = dataSets.findByProblem(problem).orElseGet(() -> dataSets.save(new ProblemDataSet(problem)));
+            dataSet.fail(message);
+        });
     }
 
     private boolean completeExistingExternalImport(WorkItem workItem) {
@@ -464,6 +547,7 @@ public class BatchJobService {
                 item.getId(),
                 item.getTitle(),
                 item.getContent(),
+                item.getTaskType().name(),
                 item.getStatus().name(),
                 item.getSortOrder(),
                 responseProblemId,
@@ -500,7 +584,9 @@ public class BatchJobService {
     private String modelLabel(AiRuntimeSettings runtime) {
         return switch (runtime.provider()) {
             case "deepseek" -> runtime.deepSeekModel();
-            case "codex" -> runtime.codexCommand();
+            case "codex" -> runtime.codexModel() == null || runtime.codexModel().isBlank()
+                    ? runtime.codexCommand()
+                    : runtime.codexModel();
             case "mock" -> "本地规则模型";
             default -> runtime.provider();
         };
@@ -580,7 +666,7 @@ public class BatchJobService {
         executor.shutdownNow();
     }
 
-    private record WorkItem(Long itemId, Long jobId, Long ownerId, String title, String content,
+    private record WorkItem(Long itemId, Long jobId, Long ownerId, BatchItemTaskType taskType, String title, String content,
                             Long reanalysisProblemId, String externalPlatform, String externalSourceId, String sourceUrl,
                             boolean markPassedAfterImport) {
     }

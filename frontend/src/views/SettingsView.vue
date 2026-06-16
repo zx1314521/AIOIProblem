@@ -10,24 +10,27 @@ const providerOptions = [
   { value: 'mock', label: '本地规则模型' }
 ] as const
 
-const settings = ref<AiSettings>({
+const defaultSettings: AiSettings = {
   provider: 'codex',
   problemAnalysisProvider: 'codex',
   recommendationProvider: 'mock',
+  dataGenerationProvider: 'codex',
   deepSeekApiKey: '',
   deepSeekBaseUrl: 'https://api.deepseek.com/chat/completions',
   deepSeekModel: 'deepseek-chat',
   deepSeekTimeoutSeconds: 45,
   codexCommand: 'codex',
+  codexModel: 'gpt-5.5',
   codexTimeoutSeconds: 180
-})
+}
+const settings = ref<AiSettings>({ ...defaultSettings })
 const message = ref('')
 const error = ref('')
 const loading = ref(false)
 
 async function load() {
   try {
-    settings.value = await api.getAiSettings()
+    settings.value = normalizeSettings(await api.getAiSettings())
   } catch (err) {
     error.value = err instanceof Error ? err.message : '设置加载失败'
   }
@@ -38,12 +41,22 @@ async function save() {
   message.value = ''
   error.value = ''
   try {
-    settings.value = await api.updateAiSettings(settings.value)
+    settings.value = normalizeSettings(await api.updateAiSettings(normalizeSettings(settings.value)))
     message.value = '已保存 AI 设置'
   } catch (err) {
     error.value = err instanceof Error ? err.message : '保存失败'
   } finally {
     loading.value = false
+  }
+}
+
+function normalizeSettings(value: Partial<AiSettings>): AiSettings {
+  return {
+    ...defaultSettings,
+    ...value,
+    problemAnalysisProvider: value.problemAnalysisProvider || value.provider || defaultSettings.problemAnalysisProvider,
+    recommendationProvider: value.recommendationProvider || value.provider || defaultSettings.recommendationProvider,
+    dataGenerationProvider: value.dataGenerationProvider || defaultSettings.dataGenerationProvider
   }
 }
 
@@ -87,6 +100,13 @@ onMounted(load)
             <option v-for="option in providerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
           </select>
         </label>
+        <label class="field">
+          <span>AI 数据生成</span>
+          <select v-model="settings.dataGenerationProvider" class="select">
+            <option v-for="option in providerOptions" :key="option.value" :value="option.value">{{ option.label }}</option>
+          </select>
+          <small class="field-hint">当前造数据流程使用 ojimport skill，推荐选择本地 Codex CLI。</small>
+        </label>
       </div>
 
       <div class="grid two">
@@ -97,10 +117,14 @@ onMounted(load)
             <input v-model="settings.codexCommand" class="input" placeholder="codex 或 codex.cmd" />
           </label>
           <label class="field">
+            <span>模型</span>
+            <input v-model="settings.codexModel" class="input" placeholder="gpt-5.5" />
+          </label>
+          <label class="field">
             <span>单题超时秒数</span>
             <input v-model.number="settings.codexTimeoutSeconds" class="input" type="number" min="5" max="1200" />
           </label>
-          <p class="note">Windows 上后端会优先解析为 <code>codex.cmd</code>，避免 PowerShell 执行策略拦截 <code>codex.ps1</code>。</p>
+          <p class="note">Windows 上后端会优先解析为 <code>codex.cmd</code>，并显式传入上方模型，避免 Codex CLI 默认到账号不支持的模型。</p>
         </section>
 
         <section class="provider-block">
@@ -183,8 +207,14 @@ onMounted(load)
 
 .routing-grid {
   display: grid;
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 12px;
+}
+
+.field-hint {
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.45;
 }
 
 .provider-block {

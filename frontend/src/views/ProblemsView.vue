@@ -1,7 +1,8 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue'
-import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, FolderPlus, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-vue-next'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ArrowDownAZ, ArrowUpAZ, CheckCircle2, DatabaseZap, FolderPlus, ListChecks, Pencil, Plus, RefreshCw, Save, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
+import { getCachedProblems, removeCachedProblems, setCachedProblems, updateCachedProblems, upsertCachedProblem } from '../services/problemListCache'
 import type { Problem, ProblemSet, TagCategory } from '../types'
 import { createProblemMarkdown, renderProblemMarkdown } from '../utils/problemMath'
 
@@ -25,6 +26,7 @@ const detailOpen = ref(false)
 const selectedProblem = ref<Problem | null>(null)
 const sortKey = ref<'createdAt' | 'title' | 'difficulty'>('createdAt')
 const sortDirection = ref<'asc' | 'desc'>('desc')
+const currentPage = ref(1)
 const selectionMode = ref(false)
 const selectedProblemIds = ref<number[]>([])
 const bulkSaving = ref(false)
@@ -43,9 +45,28 @@ const problemForm = ref({
 
 const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困难', '地狱NOI']
 const difficultyRank = new Map(difficulties.map((item, index) => [item, index]))
+const pageSize = 50
 
+const filteredProblems = computed(() => {
+  const cleanedKeyword = keyword.value.trim().toLowerCase()
+  return problems.value.filter(problem => {
+    const matchesKeyword = !cleanedKeyword
+      || problem.title.toLowerCase().includes(cleanedKeyword)
+      || problem.description.toLowerCase().includes(cleanedKeyword)
+      || problem.tags.some(tag => tag.toLowerCase().includes(cleanedKeyword))
+      || problem.source?.toLowerCase().includes(cleanedKeyword)
+    const matchesDifficulty = !difficulty.value || problem.difficulty === difficulty.value
+    const matchesTags = selectedFilterTags.value.every(tag => problem.tags.includes(tag))
+    return matchesKeyword && matchesDifficulty && matchesTags
+  })
+})
 const sortedProblems = computed(() => {
-  return [...problems.value].sort(compareProblem)
+  return [...filteredProblems.value].sort(compareProblem)
+})
+const totalPages = computed(() => Math.max(1, Math.ceil(sortedProblems.value.length / pageSize)))
+const pagedProblems = computed(() => {
+  const start = (currentPage.value - 1) * pageSize
+  return sortedProblems.value.slice(start, start + pageSize)
 })
 const formTitle = computed(() => formMode.value === 'create' ? '新建题目' : '编辑题目')
 const detailHtml = computed(() => renderProblemMarkdown(markdown, selectedProblem.value?.description || ''))
@@ -58,7 +79,7 @@ const selectedProblems = computed(() => {
   return problems.value.filter(problem => ids.has(problem.id))
 })
 const allVisibleSelected = computed(() => {
-  return sortedProblems.value.length > 0 && sortedProblems.value.every(problem => selectedProblemIdSet.value.has(problem.id))
+  return pagedProblems.value.length > 0 && pagedProblems.value.every(problem => selectedProblemIdSet.value.has(problem.id))
 })
 const selectedPreview = computed(() => selectedProblems.value.slice(0, 3).map(problem => `《${problem.title}》`).join('、'))
 const relatedFilterTagSet = computed(() => {
@@ -86,16 +107,19 @@ async function loadCatalog() {
 }
 
 async function load() {
+  const cached = getCachedProblems()
+  if (cached) {
+    problems.value = cached
+    applyFilters()
+    return
+  }
   loading.value = true
   error.value = ''
   success.value = ''
-  const params = new URLSearchParams()
-  if (keyword.value) params.set('keyword', keyword.value)
-  if (difficulty.value) params.set('difficulty', difficulty.value)
-  selectedFilterTags.value.forEach(tag => params.append('tags', tag))
   try {
-    problems.value = await api.searchProblems(params)
-    selectedProblemIds.value = selectedProblemIds.value.filter(id => problems.value.some(problem => problem.id === id))
+    problems.value = await api.searchProblems(new URLSearchParams())
+    setCachedProblems(problems.value)
+    applyFilters()
   } catch (err) {
     error.value = err instanceof Error ? err.message : '搜索失败'
   } finally {
@@ -144,12 +168,14 @@ async function saveProblem() {
     if (formMode.value === 'edit' && editingProblemId.value) {
       const updated = await api.updateProblem(editingProblemId.value, payload)
       problems.value = problems.value.map(item => item.id === updated.id ? updated : item)
+      upsertCachedProblem(updated)
       if (selectedProblem.value?.id === updated.id) {
         selectedProblem.value = updated
       }
     } else {
       const created = await api.createProblem(payload)
       problems.value = [created, ...problems.value]
+      upsertCachedProblem(created)
     }
     formOpen.value = false
   } catch (err) {
@@ -159,19 +185,14 @@ async function saveProblem() {
   }
 }
 
-async function viewProblem(problem: Problem) {
-  error.value = ''
-  try {
-    selectedProblem.value = await api.getProblem(problem.id)
-    detailOpen.value = true
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : '读取题目失败'
-  }
+function viewProblem(problem: Problem) {
+  window.open(`#/problems/${problem.id}`, '_blank', 'noopener,noreferrer')
 }
 
 async function togglePassed(problem: Problem) {
   const updated = problem.passed ? await api.unmarkPassed(problem.id) : await api.markPassed(problem.id)
   problems.value = problems.value.map(item => item.id === updated.id ? updated : item)
+  upsertCachedProblem(updated)
   if (selectedProblem.value?.id === updated.id) {
     selectedProblem.value = updated
   }
@@ -190,12 +211,12 @@ function startSelectionMode() {
 function toggleAllVisible() {
   selectionMode.value = true
   if (allVisibleSelected.value) {
-    const visibleIds = new Set(sortedProblems.value.map(problem => problem.id))
+    const visibleIds = new Set(pagedProblems.value.map(problem => problem.id))
     selectedProblemIds.value = selectedProblemIds.value.filter(id => !visibleIds.has(id))
     return
   }
   const merged = new Set(selectedProblemIds.value)
-  sortedProblems.value.forEach(problem => merged.add(problem.id))
+  pagedProblems.value.forEach(problem => merged.add(problem.id))
   selectedProblemIds.value = [...merged]
 }
 
@@ -207,6 +228,7 @@ function clearSelection() {
 function syncUpdatedProblems(updatedProblems: Problem[]) {
   const updatedMap = new Map(updatedProblems.map(problem => [problem.id, problem]))
   problems.value = problems.value.map(problem => updatedMap.get(problem.id) ?? problem)
+  updateCachedProblems(updatedProblems)
   if (selectedProblem.value) {
     selectedProblem.value = updatedMap.get(selectedProblem.value.id) ?? selectedProblem.value
   }
@@ -258,6 +280,22 @@ async function reanalyzeProblem(problem: Problem) {
   }
 }
 
+async function generateProblemData(problem: Problem) {
+  bulkSaving.value = true
+  error.value = ''
+  success.value = ''
+  try {
+    const status = await api.generateProblemData(problem.id)
+    problems.value = problems.value.map(item => item.id === problem.id ? { ...item, dataStatus: status.status } : item)
+    updateCachedProblems([{ ...problem, dataStatus: status.status }])
+    success.value = `《${problem.title}》AI 数据任务已启动，可进入题目数据管理查看进度。`
+  } catch (err: any) {
+    error.value = err instanceof Error ? err.message : 'AI 数据生成启动失败'
+  } finally {
+    bulkSaving.value = false
+  }
+}
+
 async function bulkDelete() {
   if (!selectedProblemIds.value.length) return
   const summary = selectedPreview.value ? `：${selectedPreview.value}${selectedProblems.value.length > 3 ? ' 等' : ''}` : ''
@@ -270,6 +308,7 @@ async function bulkDelete() {
     await api.deleteProblems(ids)
     const idSet = new Set(ids)
     problems.value = problems.value.filter(problem => !idSet.has(problem.id))
+    removeCachedProblems(ids)
     if (selectedProblem.value && idSet.has(selectedProblem.value.id)) {
       detailOpen.value = false
       selectedProblem.value = null
@@ -337,6 +376,7 @@ async function deleteProblem(problem: Problem) {
   try {
     await api.deleteProblem(problem.id)
     problems.value = problems.value.filter(item => item.id !== problem.id)
+    removeCachedProblems([problem.id])
     selectedProblemIds.value = selectedProblemIds.value.filter(id => id !== problem.id)
     if (selectedProblem.value?.id === problem.id) {
       detailOpen.value = false
@@ -349,6 +389,7 @@ async function deleteProblem(problem: Problem) {
 
 function toggleSortDirection() {
   sortDirection.value = sortDirection.value === 'asc' ? 'desc' : 'asc'
+  currentPage.value = 1
 }
 
 function compareProblem(a: Problem, b: Problem) {
@@ -385,6 +426,7 @@ function chooseFilterTag(value: string) {
   selectedFilterTags.value = selectedFilterTags.value.includes(value)
     ? selectedFilterTags.value.filter(tag => tag !== value)
     : [...selectedFilterTags.value, value]
+  applyFilters()
 }
 
 function clearFilters() {
@@ -392,7 +434,20 @@ function clearFilters() {
   difficulty.value = ''
   selectedFilterTags.value = []
   tagSearch.value = ''
-  load()
+  applyFilters()
+}
+
+function applyFilters() {
+  currentPage.value = 1
+  selectedProblemIds.value = selectedProblemIds.value.filter(id => filteredProblems.value.some(problem => problem.id === id))
+}
+
+function previousPage() {
+  currentPage.value = Math.max(1, currentPage.value - 1)
+}
+
+function nextPage() {
+  currentPage.value = Math.min(totalPages.value, currentPage.value + 1)
 }
 
 function toggleFormTag(value: string) {
@@ -432,9 +487,26 @@ function relevanceLabel(problem: Problem) {
   return '低相关'
 }
 
+function dataStatusLabel(problem: Problem) {
+  return {
+    NONE: '无数据',
+    GENERATING: '生成中',
+    READY: '已有数据',
+    FAILED: '失败'
+  }[problem.dataStatus ?? 'NONE']
+}
+
 onMounted(async () => {
   await loadCatalog()
   await load()
+})
+
+watch([keyword, difficulty, selectedFilterTags], applyFilters, { deep: true })
+
+watch(totalPages, pages => {
+  if (currentPage.value > pages) {
+    currentPage.value = pages
+  }
 })
 </script>
 
@@ -457,7 +529,7 @@ onMounted(async () => {
           class="tab-pill"
           type="button"
           :class="{ active: difficulty === '' }"
-          @click="difficulty = ''; load()"
+          @click="difficulty = ''"
         >
           全部
         </button>
@@ -467,7 +539,7 @@ onMounted(async () => {
           class="tab-pill"
           type="button"
           :class="{ active: difficulty === item }"
-          @click="difficulty = item; load()"
+          @click="difficulty = item"
         >
           {{ item }}
         </button>
@@ -475,9 +547,9 @@ onMounted(async () => {
 
       <div class="filter-line search-line">
         <span class="filter-label">筛选</span>
-        <input v-model="keyword" class="input compact-input keyword-input" placeholder="关键词" @keyup.enter="load" />
+        <input v-model="keyword" class="input compact-input keyword-input" placeholder="关键词" @keyup.enter="applyFilters" />
         <input v-model="tagSearch" class="input compact-input tag-input" placeholder="搜索标准标签" />
-        <button class="primary compact-search" type="button" @click="load"><Search :size="16" />搜索</button>
+        <button class="primary compact-search" type="button" @click="applyFilters"><Search :size="16" />搜索</button>
         <button class="plain-link" type="button" @click="clearFilters">清除筛选</button>
       </div>
 
@@ -516,6 +588,11 @@ onMounted(async () => {
 
     <div class="result-toolbar">
       <div class="result-count">共计 <strong>{{ sortedProblems.length }}</strong> 条结果</div>
+      <div v-if="sortedProblems.length" class="pagination-controls" aria-label="题目分页">
+        <button class="ghost page-button" type="button" :disabled="currentPage === 1" @click="previousPage">上一页</button>
+        <span class="page-state">第 {{ currentPage }} / {{ totalPages }} 页</span>
+        <button class="ghost page-button" type="button" :disabled="currentPage === totalPages" @click="nextPage">下一页</button>
+      </div>
       <label class="inline-field compact-sort">
         <span>排序</span>
         <select v-model="sortKey" class="select compact-select">
@@ -567,14 +644,15 @@ onMounted(async () => {
       <div v-if="sortedProblems.length" class="problem-table-head" :class="{ selecting: selectionMode }">
         <span v-if="selectionMode"></span>
         <span>状态</span>
-        <span>题号</span>
-        <span>题目名称</span>
+        <span>编号</span>
+        <span>题目</span>
         <span>标签</span>
         <span>难度</span>
+        <span>数据</span>
         <span>操作</span>
       </div>
       <article
-        v-for="problem in sortedProblems"
+        v-for="problem in pagedProblems"
         :key="problem.id"
         class="problem-row problem-row-compact"
         :class="{ 'selecting-row': selectionMode }"
@@ -605,6 +683,9 @@ onMounted(async () => {
         <div class="difficulty-cell">
           <span class="difficulty">{{ problem.difficulty }}</span>
         </div>
+        <div class="data-cell">
+          <span class="data-chip" :class="(problem.dataStatus ?? 'NONE').toLowerCase()">{{ dataStatusLabel(problem) }}</span>
+        </div>
         <div class="row-actions" @click.stop>
           <button class="ghost icon-action edit-action" type="button" title="编辑题目" @click="openEdit(problem)">
             <Pencil :size="15" />编辑
@@ -614,6 +695,9 @@ onMounted(async () => {
           </button>
           <button class="ghost icon-action reanalyze-action" type="button" title="重新分析题目" :disabled="bulkSaving" @click="reanalyzeProblem(problem)">
             <RefreshCw :size="15" />分析
+          </button>
+          <button class="ghost icon-action data-action" type="button" title="AI数据" :disabled="bulkSaving || problem.dataStatus === 'GENERATING'" @click.stop="generateProblemData(problem)">
+            <DatabaseZap :size="15" />AI数据
           </button>
           <button class="ghost icon-action delete-action danger" type="button" title="删除题目" @click="deleteProblem(problem)">
             <Trash2 :size="15" />删除
@@ -1285,6 +1369,27 @@ h2 {
   font-weight: 800;
 }
 
+.pagination-controls {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  color: #64748b;
+  font-size: 13px;
+}
+
+.page-button {
+  min-height: 28px;
+  border-radius: 4px;
+  padding: 5px 8px;
+  font-size: 12px;
+}
+
+.page-state {
+  min-width: 78px;
+  text-align: center;
+  white-space: nowrap;
+}
+
 .compact-sort {
   gap: 6px;
 }
@@ -1324,13 +1429,13 @@ h2 {
 .problem-table-head,
 .problem-row-compact {
   display: grid;
-  grid-template-columns: 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 272px;
+  grid-template-columns: 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 86px 340px;
   align-items: center;
 }
 
 .problem-table-head.selecting,
 .problem-row-compact.selecting-row {
-  grid-template-columns: 36px 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 272px;
+  grid-template-columns: 36px 46px 78px minmax(240px, 1fr) minmax(180px, 0.75fr) 100px 86px 340px;
 }
 
 .problem-table-head {
@@ -1451,6 +1556,40 @@ h2 {
   font-weight: 800;
 }
 
+.data-cell {
+  display: flex;
+  justify-content: flex-start;
+}
+
+.data-chip {
+  border: 1px solid #cfd7df;
+  border-radius: 3px;
+  background: #f6f7f9;
+  color: #4b5563;
+  padding: 3px 6px;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+}
+
+.data-chip.ready {
+  border-color: #b8d8c4;
+  background: #edf8f1;
+  color: #257044;
+}
+
+.data-chip.generating {
+  border-color: #e2cc91;
+  background: #fff8e4;
+  color: #8a5c12;
+}
+
+.data-chip.failed {
+  border-color: #efbbb5;
+  background: #fff0ed;
+  color: #a43e31;
+}
+
 .match-chip {
   border: 0;
   border-radius: 3px;
@@ -1513,6 +1652,18 @@ h2 {
   background: #eee6ff;
 }
 
+.data-action {
+  min-width: 78px;
+  border-color: #c2d7e8;
+  background: #eff7ff;
+  color: #2475b9;
+}
+
+.data-action:hover {
+  border-color: #91bee4;
+  background: #e4f2ff;
+}
+
 .delete-action {
   border-color: #f1c1bc;
   background: #fff2f0;
@@ -1538,12 +1689,12 @@ h2 {
 @media (max-width: 1120px) {
   .problem-table-head,
   .problem-row-compact {
-    grid-template-columns: 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px;
+    grid-template-columns: 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px 78px;
   }
 
   .problem-table-head.selecting,
   .problem-row-compact.selecting-row {
-    grid-template-columns: 30px 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px;
+    grid-template-columns: 30px 38px 68px minmax(220px, 1fr) minmax(160px, 0.65fr) 88px 78px;
   }
 
   .problem-table-head span:last-child,
@@ -1556,6 +1707,11 @@ h2 {
   .filter-line,
   .result-toolbar {
     align-items: stretch;
+  }
+
+  .pagination-controls {
+    width: 100%;
+    justify-content: flex-start;
   }
 
   .filter-label {

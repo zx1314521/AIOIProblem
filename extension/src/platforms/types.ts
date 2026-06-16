@@ -1,4 +1,4 @@
-export type OjPlatform = 'CODEFORCES' | 'ATCODER' | 'LUOGU' | 'NOWCODER'
+export type OjPlatform = 'CODEFORCES' | 'ATCODER' | 'LUOGU' | 'NOWCODER' | 'VJUDGE'
 
 export interface ImportCandidate {
   platform: OjPlatform

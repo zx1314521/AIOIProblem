@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { RefreshCw, SquareCheckBig } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { RecommendationResponse } from '../types'
@@ -49,7 +50,16 @@ onMounted(load)
           <header>
             <div class="recommendation-title">
               <span class="order-badge">{{ item.practiceOrder }}</span>
-              <h3>{{ item.problem.title }}</h3>
+              <h3>
+                <RouterLink
+                  class="problem-title-link"
+                  :to="`/problems/${item.problem.id}`"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                >
+                  {{ item.problem.title }}
+                </RouterLink>
+              </h3>
             </div>
             <span class="difficulty">{{ item.problem.difficulty }}</span>
           </header>
@@ -132,5 +142,16 @@ onMounted(load)
 
 .pass-action {
   white-space: nowrap;
+}
+
+.problem-title-link {
+  color: inherit;
+  text-decoration: none;
+}
+
+.problem-title-link:hover,
+.problem-title-link:focus-visible {
+  color: #2475b9;
+  text-decoration: underline;
 }
 </style>

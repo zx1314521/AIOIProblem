@@ -4,6 +4,16 @@ import ProblemSetsView from './ProblemSetsView.vue'
 import { api } from '../services/api'
 import type { Problem, ProblemSet } from '../types'
 
+const push = vi.fn()
+
+vi.mock('vue-router', () => ({
+  useRouter: () => ({ push }),
+  RouterLink: {
+    props: ['to', 'target', 'rel'],
+    template: '<a :href="to" :target="target" :rel="rel"><slot /></a>'
+  }
+}))
+
 vi.mock('../services/api', () => ({
   api: {
     listProblemSets: vi.fn(),
@@ -11,7 +21,8 @@ vi.mock('../services/api', () => ({
     searchProblems: vi.fn(),
     addProblemsToSet: vi.fn(),
     removeProblemFromSet: vi.fn(),
-    reorderProblemSetItems: vi.fn()
+    reorderProblemSetItems: vi.fn(),
+    deleteProblemSet: vi.fn()
   }
 }))
 
@@ -45,8 +56,17 @@ const sampleSet: ProblemSet = {
   problems: [firstProblem]
 }
 
+const secondSet: ProblemSet = {
+  id: 8,
+  name: 'CSPJ 复习',
+  description: '第二阶段',
+  createdAt: '2026-05-26T00:00:00',
+  problems: [secondProblem]
+}
+
 beforeEach(() => {
   vi.clearAllMocks()
+  push.mockReset()
   vi.mocked(api.listProblemSets).mockResolvedValue([sampleSet])
 })
 
@@ -87,12 +107,30 @@ test('reorders current problem set items with move buttons', async () => {
   expect(titles).toEqual(['贪心训练', '基础模拟'])
 })
 
-test('opens a problem statement from the selected problem set', async () => {
+test('opens a problem detail page in a new tab from the selected problem set', async () => {
   render(ProblemSetsView)
 
-  await userEvent.click(await screen.findByRole('button', { name: '基础模拟' }))
+  const link = await screen.findByRole('link', { name: '基础模拟' })
 
-  expect(await screen.findByRole('dialog', { name: /基础模拟/ })).toBeTruthy()
-  expect(screen.getByText(/输出最大值/)).toBeTruthy()
-  expect(document.querySelector('.problem-statement .compact-math')).toBeTruthy()
+  expect(link.getAttribute('href')).toBe('/problems/1')
+  expect(link.getAttribute('target')).toBe('_blank')
+  expect(link.getAttribute('rel')).toBe('noopener noreferrer')
+  expect(push).not.toHaveBeenCalled()
+  expect(screen.queryByRole('dialog', { name: /基础模拟/ })).toBeNull()
+})
+test('deletes the selected problem set and selects the next available set', async () => {
+  vi.mocked(api.listProblemSets).mockResolvedValue([sampleSet, secondSet])
+  vi.mocked(api.deleteProblemSet).mockResolvedValue(undefined)
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+
+  render(ProblemSetsView)
+
+  expect(await screen.findByRole('heading', { name: sampleSet.name })).toBeTruthy()
+  await userEvent.click(screen.getByRole('button', { name: `删除题单 ${sampleSet.name}` }))
+
+  await waitFor(() => {
+    expect(api.deleteProblemSet).toHaveBeenCalledWith(7)
+  })
+  expect(await screen.findByRole('heading', { name: secondSet.name })).toBeTruthy()
+  expect(screen.queryByRole('button', { name: `删除题单 ${sampleSet.name}` })).toBeNull()
 })

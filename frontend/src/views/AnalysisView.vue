@@ -303,6 +303,10 @@ function displayStatusText(item: BatchItem) {
   return isFallbackItem(item) ? '规则兜底' : statusText(item.status)
 }
 
+function taskTypeText(item: BatchItem) {
+  return item.taskType === 'DATA_GENERATION' ? '造数据' : '题目分析'
+}
+
 function titleFromFilename(name: string) {
   return name.replace(/\.(txt|md)$/i, '') || '未命名题目'
 }
@@ -406,7 +410,7 @@ onUnmounted(() => {
           @drop="onDrop(item)"
         >
           <strong><span>{{ index + 1 }}</span>{{ item.title }}</strong>
-          <small>{{ item.jobName }} · {{ displayStatusText(item) }}</small>
+          <small><span class="task-type" :class="{ data: item.taskType === 'DATA_GENERATION' }">{{ taskTypeText(item) }}</span>{{ item.jobName }} · {{ displayStatusText(item) }}</small>
           <span v-if="item.status === 'FAILED' && item.errorMessage" class="error-summary">
             {{ isErrorExpanded(item.id) ? item.errorMessage : errorSummary(item.errorMessage) }}
           </span>
@@ -421,7 +425,7 @@ onUnmounted(() => {
       <template v-if="selectedItem">
         <header class="preview-header">
           <div>
-            <span class="status">{{ displayStatusText(selectedItem) }}</span>
+            <span class="status">{{ taskTypeText(selectedItem) }} · {{ displayStatusText(selectedItem) }}</span>
             <h2>{{ selectedItem.title }}</h2>
           </div>
           <div v-if="selectedItem.status === 'PENDING'" class="actions">
@@ -619,6 +623,24 @@ onUnmounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.task-type {
+  display: inline-block;
+  margin-right: 6px;
+  border: 1px solid #c9dfcf;
+  border-radius: 4px;
+  background: #eef8f1;
+  color: #257044;
+  padding: 1px 5px;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.task-type.data {
+  border-color: #c2d7e8;
+  background: #eff7ff;
+  color: #2475b9;
 }
 
 .error-summary {

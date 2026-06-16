@@ -4,6 +4,8 @@ import LoginView from './views/LoginView.vue'
 import AnalysisView from './views/AnalysisView.vue'
 import AnalysisHistoryView from './views/AnalysisHistoryView.vue'
 import ProblemsView from './views/ProblemsView.vue'
+import ProblemDetailView from './views/ProblemDetailView.vue'
+import ProblemDataView from './views/ProblemDataView.vue'
 import ProblemSetsView from './views/ProblemSetsView.vue'
 import RecommendationsView from './views/RecommendationsView.vue'
 import PassedView from './views/PassedView.vue'
@@ -18,6 +20,8 @@ export const routes: RouteRecordRaw[] = [
   { path: '/history', component: AnalysisHistoryView },
   { path: '/oj-imports', component: OjImportHistoryView },
   { path: '/problems', component: ProblemsView },
+  { path: '/problems/:id/data', component: ProblemDataView },
+  { path: '/problems/:id', component: ProblemDetailView },
   { path: '/sets', component: ProblemSetsView },
   { path: '/batch', redirect: '/analysis' },
   { path: '/recommendations', component: RecommendationsView },

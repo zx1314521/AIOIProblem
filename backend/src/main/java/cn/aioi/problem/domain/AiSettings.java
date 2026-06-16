@@ -20,12 +20,16 @@ public class AiSettings {
     @Column(length = 24)
     private String recommendationProvider;
 
+    @Column(length = 24)
+    private String dataGenerationProvider;
+
     private String deepSeekApiKey;
     private String deepSeekBaseUrl;
     private String deepSeekModel;
     private Integer deepSeekTimeoutSeconds;
 
     private String codexCommand;
+    private String codexModel;
     private Integer codexTimeoutSeconds;
 
     protected AiSettings() {
@@ -37,25 +41,31 @@ public class AiSettings {
         this.provider = provider;
         this.problemAnalysisProvider = provider;
         this.recommendationProvider = provider;
+        this.dataGenerationProvider = "codex";
         this.deepSeekApiKey = deepSeekApiKey;
         this.deepSeekBaseUrl = deepSeekBaseUrl;
         this.deepSeekModel = deepSeekModel;
         this.deepSeekTimeoutSeconds = deepSeekTimeoutSeconds;
         this.codexCommand = codexCommand;
+        this.codexModel = "";
         this.codexTimeoutSeconds = codexTimeoutSeconds;
     }
 
     public void update(String provider, String problemAnalysisProvider, String recommendationProvider,
+                       String dataGenerationProvider,
                        String deepSeekApiKey, String deepSeekBaseUrl, String deepSeekModel,
-                       Integer deepSeekTimeoutSeconds, String codexCommand, Integer codexTimeoutSeconds) {
+                       Integer deepSeekTimeoutSeconds, String codexCommand, String codexModel,
+                       Integer codexTimeoutSeconds) {
         this.provider = provider;
         this.problemAnalysisProvider = problemAnalysisProvider;
         this.recommendationProvider = recommendationProvider;
+        this.dataGenerationProvider = dataGenerationProvider;
         this.deepSeekApiKey = deepSeekApiKey;
         this.deepSeekBaseUrl = deepSeekBaseUrl;
         this.deepSeekModel = deepSeekModel;
         this.deepSeekTimeoutSeconds = deepSeekTimeoutSeconds;
         this.codexCommand = codexCommand;
+        this.codexModel = codexModel;
         this.codexTimeoutSeconds = codexTimeoutSeconds;
     }
 
@@ -73,6 +83,10 @@ public class AiSettings {
 
     public String getRecommendationProvider() {
         return recommendationProvider;
+    }
+
+    public String getDataGenerationProvider() {
+        return dataGenerationProvider;
     }
 
     public String getDeepSeekApiKey() {
@@ -93,6 +107,10 @@ public class AiSettings {
 
     public String getCodexCommand() {
         return codexCommand;
+    }
+
+    public String getCodexModel() {
+        return codexModel;
     }
 
     public Integer getCodexTimeoutSeconds() {

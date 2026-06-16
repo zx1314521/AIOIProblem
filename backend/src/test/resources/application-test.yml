@@ -22,5 +22,5 @@ aioi:
       timeout-seconds: 1
     codex:
       command: codex
+      model: gpt-5.5
       timeout-seconds: 1
-

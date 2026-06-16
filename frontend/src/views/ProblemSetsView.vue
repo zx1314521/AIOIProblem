@@ -1,12 +1,11 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue'
+import { RouterLink } from 'vue-router'
 import { ArrowDown, ArrowUp, CheckCircle2, FolderPlus, Plus, Search, Trash2, X } from 'lucide-vue-next'
 import { api } from '../services/api'
 import type { Problem, ProblemSet } from '../types'
-import { createProblemMarkdown, renderProblemMarkdown } from '../utils/problemMath'
 
 const difficulties = ['入门', '简单', 'CSPJ中等', 'CSPS提高', 'NOIP困难', '地狱NOI']
-const markdown = createProblemMarkdown()
 
 const sets = ref<ProblemSet[]>([])
 const selectedSetId = ref<number | null>(null)
@@ -20,12 +19,11 @@ const searchResults = ref<Problem[]>([])
 const selectedProblemIds = ref<number[]>([])
 const searching = ref(false)
 const adding = ref(false)
+const deletingSetId = ref<number | null>(null)
 const draggedProblemId = ref<number | null>(null)
-const selectedProblem = ref<Problem | null>(null)
 
 const selectedSet = computed(() => sets.value.find(set => set.id === selectedSetId.value) ?? sets.value[0])
 const selectedSetProblemIds = computed(() => new Set(selectedSet.value?.problems.map(problem => problem.id) ?? []))
-const selectedProblemHtml = computed(() => renderProblemMarkdown(markdown, selectedProblem.value?.description || ''))
 
 const selectedSetStats = computed(() => {
   const problems = selectedSet.value?.problems ?? []
@@ -72,13 +70,30 @@ async function createSet() {
 
 function selectSet(set: ProblemSet) {
   selectedSetId.value = set.id
-  selectedProblem.value = null
   error.value = ''
 }
 
 function updateSet(updated: ProblemSet) {
   sets.value = sets.value.map(set => set.id === updated.id ? updated : set)
   selectedSetId.value = updated.id
+}
+
+async function deleteSet(set: ProblemSet) {
+  if (!window.confirm(`确定删除题单「${set.name}」吗？题单中的题目不会被删除。`)) return
+  deletingSetId.value = set.id
+  try {
+    await api.deleteProblemSet(set.id)
+    const remaining = sets.value.filter(item => item.id !== set.id)
+    sets.value = remaining
+    if (selectedSetId.value === set.id) {
+      selectedSetId.value = remaining[0]?.id ?? null
+    }
+    error.value = ''
+  } catch (err) {
+    error.value = err instanceof Error ? err.message : '题单删除失败'
+  } finally {
+    deletingSetId.value = null
+  }
 }
 
 function openSearch() {
@@ -93,14 +108,6 @@ function openSearch() {
 function closeSearch() {
   searchOpen.value = false
   selectedProblemIds.value = []
-}
-
-function openProblem(problem: Problem) {
-  selectedProblem.value = problem
-}
-
-function closeProblem() {
-  selectedProblem.value = null
 }
 
 async function searchProblems() {
@@ -226,7 +233,18 @@ onMounted(load)
             <h2>{{ selectedSet.name }}</h2>
             <p>{{ selectedSet.description || '暂无说明' }}</p>
           </div>
-          <button class="primary" type="button" @click="openSearch"><Plus :size="17" />添加题目</button>
+          <div class="set-detail-actions">
+            <button
+              class="text-danger"
+              type="button"
+              :aria-label="`删除题单 ${selectedSet.name}`"
+              :disabled="deletingSetId === selectedSet.id"
+              @click="deleteSet(selectedSet)"
+            >
+              <Trash2 :size="15" />删除题单
+            </button>
+            <button class="primary" type="button" @click="openSearch"><Plus :size="17" />添加题目</button>
+          </div>
         </div>
 
         <div class="set-metrics">
@@ -270,9 +288,14 @@ onMounted(load)
                 </td>
                 <td>P{{ problem.id }}</td>
                 <td>
-                  <button class="set-problem-title title-link" type="button" @click="openProblem(problem)">
+                  <RouterLink
+                    class="set-problem-title title-link"
+                    :to="`/problems/${problem.id}`"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                  >
                     {{ problem.title }}
-                  </button>
+                  </RouterLink>
                 </td>
                 <td>
                   <div class="table-tags">
@@ -351,30 +374,6 @@ onMounted(load)
           加入当前题单
         </button>
       </footer>
-    </section>
-  </div>
-
-  <div v-if="selectedProblem" class="modal-backdrop" @click.self="closeProblem">
-    <section class="problem-detail-modal panel" role="dialog" aria-modal="true" :aria-label="selectedProblem.title">
-      <header class="modal-header problem-modal-header">
-        <div>
-          <h2>P{{ selectedProblem.id }} {{ selectedProblem.title }}</h2>
-          <div class="problem-meta-line">
-            <span class="difficulty">{{ selectedProblem.difficulty }}</span>
-            <span v-if="selectedProblem.passed" class="pass-state passed"><CheckCircle2 :size="14" />已通过</span>
-            <span v-else class="pass-state"><CheckCircle2 :size="14" />未通过</span>
-          </div>
-        </div>
-        <button class="icon-btn" type="button" aria-label="关闭题面" @click="closeProblem"><X :size="18" /></button>
-      </header>
-
-      <div class="problem-detail-body">
-        <div class="tag-row problem-detail-tags">
-          <span v-for="tag in selectedProblem.tags" :key="tag" class="tag">{{ tag }}</span>
-          <span v-if="selectedProblem.tags.length === 0" class="tag">没有标签</span>
-        </div>
-        <article class="markdown-preview problem-statement" v-html="selectedProblemHtml"></article>
-      </div>
     </section>
   </div>
 </template>
@@ -461,6 +460,13 @@ onMounted(load)
   align-items: flex-start;
   padding: 18px 20px 12px;
   border-bottom: 1px solid var(--line);
+}
+
+.set-detail-actions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
 }
 
 .set-detail-header h2,
@@ -654,15 +660,6 @@ onMounted(load)
   grid-template-rows: auto auto minmax(0, 1fr) auto;
 }
 
-.problem-detail-modal {
-  width: min(1040px, 100%);
-  max-height: min(820px, calc(100vh - 44px));
-  padding: 0;
-  overflow: hidden;
-  display: grid;
-  grid-template-rows: auto minmax(0, 1fr);
-}
-
 .modal-header,
 .modal-footer {
   display: flex;
@@ -676,37 +673,6 @@ onMounted(load)
 .modal-footer {
   border-top: 1px solid var(--line);
   border-bottom: 0;
-}
-
-.problem-modal-header {
-  align-items: flex-start;
-}
-
-.problem-meta-line {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 10px;
-}
-
-.problem-detail-body {
-  overflow: auto;
-  padding: 18px 22px 26px;
-}
-
-.problem-detail-tags {
-  margin-bottom: 14px;
-}
-
-.problem-statement {
-  max-width: 900px;
-}
-
-.problem-statement :deep(h1),
-.problem-statement :deep(h2),
-.problem-statement :deep(h3) {
-  margin-top: 18px;
-  margin-bottom: 10px;
 }
 
 .search-toolbar {

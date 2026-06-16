@@ -36,6 +36,10 @@ public class BatchJobItem {
     @Column(nullable = false, length = 24)
     private BatchItemStatus status;
 
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false, length = 32)
+    private BatchItemTaskType taskType = BatchItemTaskType.PROBLEM_ANALYSIS;
+
     @Column(nullable = false)
     private int sortOrder;
 
@@ -112,10 +116,20 @@ public class BatchJobItem {
         return item;
     }
 
+    public static BatchJobItem dataGeneration(BatchJob job, String title, String content, int sortOrder, Long problemId) {
+        BatchJobItem item = new BatchJobItem(job, title, content, sortOrder);
+        item.taskType = BatchItemTaskType.DATA_GENERATION;
+        item.reanalysisProblemId = problemId;
+        return item;
+    }
+
     @PrePersist
     void prePersist() {
         if (createdAt == null) {
             createdAt = Instant.now();
+        }
+        if (taskType == null) {
+            taskType = BatchItemTaskType.PROBLEM_ANALYSIS;
         }
     }
 
@@ -195,6 +209,10 @@ public class BatchJobItem {
 
     public BatchItemStatus getStatus() {
         return status;
+    }
+
+    public BatchItemTaskType getTaskType() {
+        return taskType;
     }
 
     public int getSortOrder() {

@@ -12,11 +12,13 @@ public final class SettingsDtos {
             @NotBlank String provider,
             String problemAnalysisProvider,
             String recommendationProvider,
+            String dataGenerationProvider,
             String deepSeekApiKey,
             String deepSeekBaseUrl,
             String deepSeekModel,
             @Min(5) @Max(600) Integer deepSeekTimeoutSeconds,
             String codexCommand,
+            String codexModel,
             @Min(5) @Max(1200) Integer codexTimeoutSeconds
     ) {
     }
@@ -25,11 +27,13 @@ public final class SettingsDtos {
             String provider,
             String problemAnalysisProvider,
             String recommendationProvider,
+            String dataGenerationProvider,
             String deepSeekApiKey,
             String deepSeekBaseUrl,
             String deepSeekModel,
             int deepSeekTimeoutSeconds,
             String codexCommand,
+            String codexModel,
             int codexTimeoutSeconds
     ) {
     }

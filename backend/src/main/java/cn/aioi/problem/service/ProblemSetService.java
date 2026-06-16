@@ -74,6 +74,12 @@ public class ProblemSetService {
         return toResponse(set, user);
     }
 
+    @Transactional
+    public void delete(Long id, User user) {
+        ProblemSet set = ownedSet(id, user);
+        problemSets.delete(set);
+    }
+
     private ProblemSet ownedSet(Long id, User user) {
         return problemSets.findByIdAndOwner(id, user)
                 .orElseThrow(() -> new EntityNotFoundException("题单不存在"));
