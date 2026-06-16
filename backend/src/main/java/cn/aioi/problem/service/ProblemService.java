@@ -20,6 +20,7 @@ import java.util.HashSet;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Set;
 import java.util.stream.Collectors;
 
@@ -49,11 +50,15 @@ public class ProblemService {
                 : DifficultyLevel.fromLabelOrName(difficulty);
         String normalizedKeyword = lowerOrNull(keyword);
         List<String> normalizedTags = normalizeSearchTags(tag, tags);
-        return problems.findAllWithTags().stream()
+        List<Problem> matches = problems.findAllWithTags().stream()
                 .filter(problem -> matchesKeyword(problem, normalizedKeyword))
                 .filter(problem -> parsedDifficulty == null || problem.getDifficulty() == parsedDifficulty)
                 .sorted(searchComparator(normalizedTags))
-                .map(problem -> response(problem, user))
+                .toList();
+        ProblemStateLookup stateLookup = loadState(matches, user);
+        return matches.stream()
+                .map(problem -> response(problem, stateLookup.passedIds().contains(problem.getId()),
+                        stateLookup.dataStatuses().getOrDefault(problem.getId(), "NONE")))
                 .toList();
     }
 
@@ -259,6 +264,28 @@ public class ProblemService {
         return ProblemDtos.ProblemResponse.from(problem, passedProblems.existsByUserAndProblem(user, problem), dataStatus);
     }
 
+    private ProblemDtos.ProblemResponse response(Problem problem, boolean passed, String dataStatus) {
+        return ProblemDtos.ProblemResponse.from(problem, passed, dataStatus);
+    }
+
+    private ProblemStateLookup loadState(List<Problem> matches, User user) {
+        if (matches.isEmpty()) {
+            return new ProblemStateLookup(Set.of(), Map.of());
+        }
+        Set<Long> ids = matches.stream()
+                .map(Problem::getId)
+                .collect(Collectors.toSet());
+        Set<Long> passedIds = passedProblems.findPassedProblemIdsByUser(user).stream()
+                .filter(ids::contains)
+                .collect(Collectors.toSet());
+        Map<Long, String> dataStatuses = dataSets.findStatusesByProblemIds(matches.stream().map(Problem::getId).toList()).stream()
+                .collect(Collectors.toMap(
+                        row -> (Long) row[0],
+                        row -> row[1] == null ? "NONE" : ((Enum<?>) row[1]).name()
+                ));
+        return new ProblemStateLookup(passedIds, dataStatuses);
+    }
+
     private static ProblemDtos.DuplicateHint duplicateHint(Problem problem, Set<String> targetTitleTokens, Set<String> targetTags) {
         Set<String> candidateTitleTokens = titleTokens(problem.getTitle());
         List<String> sharedTitleTokens = candidateTitleTokens.stream()
@@ -295,5 +322,8 @@ public class ProblemService {
         return tags.stream()
                 .filter(tag -> !TagCatalogService.NO_TAG.equals(tag))
                 .collect(Collectors.toCollection(LinkedHashSet::new));
+    }
+
+    private record ProblemStateLookup(Set<Long> passedIds, Map<Long, String> dataStatuses) {
     }
 }

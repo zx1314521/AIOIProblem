@@ -4,7 +4,6 @@ import cn.aioi.problem.ai.AiAssessment;
 import cn.aioi.problem.ai.AiProvider;
 import cn.aioi.problem.ai.AiRuntimeSettings;
 import cn.aioi.problem.ai.AiTaskType;
-import cn.aioi.problem.ai.CodexCliAiProvider;
 import cn.aioi.problem.ai.ProblemInput;
 import cn.aioi.problem.api.dto.BatchDtos;
 import cn.aioi.problem.api.dto.ProblemDataDtos;
@@ -56,7 +55,6 @@ public class BatchJobService {
     private final PassedProblemRepository passedProblems;
     private final UserRepository users;
     private final AiProvider aiProvider;
-    private final CodexCliAiProvider codexCli;
     private final AiSettingsService aiSettingsService;
     private final TagCatalogService tagCatalog;
     private final ProblemDataSetRepository dataSets;
@@ -67,7 +65,7 @@ public class BatchJobService {
 
     public BatchJobService(BatchJobRepository jobs, BatchJobItemRepository items, ProblemRepository problems,
                            PassedProblemRepository passedProblems, UserRepository users,
-                           AiProvider aiProvider, CodexCliAiProvider codexCli, AiSettingsService aiSettingsService,
+                           AiProvider aiProvider, AiSettingsService aiSettingsService,
                            TagCatalogService tagCatalog, ProblemDataSetRepository dataSets,
                            ProblemDataGenerationParser dataGenerationParser,
                            PlatformTransactionManager transactionManager) {
@@ -77,7 +75,6 @@ public class BatchJobService {
         this.passedProblems = passedProblems;
         this.users = users;
         this.aiProvider = aiProvider;
-        this.codexCli = codexCli;
         this.aiSettingsService = aiSettingsService;
         this.tagCatalog = tagCatalog;
         this.dataSets = dataSets;
@@ -390,10 +387,7 @@ public class BatchJobService {
     }
 
     private void processDataGeneration(WorkItem workItem, AiRuntimeSettings runtime, long started) {
-        if (!"codex".equals(runtime.provider())) {
-            throw new IllegalStateException("AI 数据生成需要使用 Codex CLI");
-        }
-        String output = codexCli.generateTestData(new ProblemInput(workItem.title(), workItem.content()), runtime);
+        String output = aiProvider.generateTestData(new ProblemInput(workItem.title(), workItem.content()));
         ProblemDataDtos.GeneratedData generated = dataGenerationParser.parse(output);
         long durationMs = elapsedMs(started);
         transactionTemplate.executeWithoutResult(status -> {

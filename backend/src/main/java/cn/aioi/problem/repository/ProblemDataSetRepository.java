@@ -5,6 +5,7 @@ import cn.aioi.problem.domain.ProblemDataSet;
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 
+import java.util.List;
 import java.util.Optional;
 
 public interface ProblemDataSetRepository extends JpaRepository<ProblemDataSet, Long> {
@@ -14,4 +15,7 @@ public interface ProblemDataSetRepository extends JpaRepository<ProblemDataSet, 
 
     @Query("select d.status from ProblemDataSet d where d.problem.id = :problemId")
     Optional<cn.aioi.problem.domain.ProblemDataStatus> findStatusByProblemId(Long problemId);
+
+    @Query("select d.problem.id, d.status from ProblemDataSet d where d.problem.id in :problemIds")
+    List<Object[]> findStatusesByProblemIds(List<Long> problemIds);
 }

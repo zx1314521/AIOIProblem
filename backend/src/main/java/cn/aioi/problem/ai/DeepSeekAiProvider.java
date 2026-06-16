@@ -59,6 +59,21 @@ public class DeepSeekAiProvider {
         return extractMessageContent(response).trim();
     }
 
+    public String generateTestData(ProblemInput input, AiRuntimeSettings settings) {
+        if (settings.deepSeekApiKey() == null || settings.deepSeekApiKey().isBlank()) {
+            throw new IllegalStateException("DeepSeek API key is not configured");
+        }
+        String response = callText(
+                settings.deepSeekBaseUrl(),
+                settings.deepSeekApiKey(),
+                settings.deepSeekModel(),
+                settings.deepSeekTimeoutSeconds(),
+                testDataSystemPrompt(),
+                input.title() + "\n\n" + input.text()
+        );
+        return extractMessageContent(response).trim();
+    }
+
     private AiAssessment call(ProblemInput input, String baseUrl, String apiKey, String model, int timeoutSeconds) {
         String response = callText(baseUrl, apiKey, model, timeoutSeconds, systemPrompt(), input.title() + "\n\n" + input.text());
         return parser.parse(response == null ? "{}" : response);
@@ -106,6 +121,25 @@ public class DeepSeekAiProvider {
                 Preserve meaning, input/output format, samples, constraints, math symbols, and variable names.
                 Remove web navigation, buttons, ads, duplicated blank lines, and irrelevant page status text.
                 If the original text is already Chinese, only improve formatting and remove noise.
+                """;
+    }
+
+    private String testDataSystemPrompt() {
+        return """
+                You generate competitive-programming test data for an existing problem.
+                Infer the input format, output format, constraints, time/memory intent, and algorithm type from the statement.
+                Output JSON only, without Markdown or explanations.
+                Required JSON shape:
+                {"stdCpp":"","configYaml":"","notes":"","cases":[{"index":1,"input":"","output":""}]}
+                Requirements:
+                - Produce a correct C++17 reference solution as stdCpp.
+                - Produce exactly 25 paired test cases with indexes 1 through 25 exactly once.
+                - Cases 1-2 should be samples when present, otherwise minimal valid cases.
+                - Cases 3-8 cover small scale and boundary properties.
+                - Cases 9-11 are hack cases for common wrong solutions.
+                - Cases 12-20 cover medium/large stress.
+                - Cases 21-25 are mixed random regression cases.
+                - configYaml should describe type/time/memory and all cases.
                 """;
     }
 

@@ -131,4 +131,30 @@ class AiProviderRouterTest {
 
         assertThat(polished).isEqualTo("fallback cleanup");
     }
+
+    @Test
+    void routesTestDataGenerationThroughConfiguredProvider() {
+        AiSettingsService settingsService = mock(AiSettingsService.class);
+        RuleBasedAiProvider ruleBased = mock(RuleBasedAiProvider.class);
+        DeepSeekAiProvider deepSeek = mock(DeepSeekAiProvider.class);
+        CodexCliAiProvider codexCli = mock(CodexCliAiProvider.class);
+        AiProviderRouter router = new AiProviderRouter(settingsService, ruleBased, deepSeek, codexCli);
+        ProblemInput input = new ProblemInput("Test Data", "read n and output n");
+        AiRuntimeSettings settings = new AiRuntimeSettings(
+                "deepseek",
+                "key",
+                "https://api.deepseek.com/chat/completions",
+                "deepseek-chat",
+                45,
+                "codex",
+                "gpt-5.5",
+                180
+        );
+        when(settingsService.runtimeSettings(AiTaskType.DATA_GENERATION)).thenReturn(settings);
+        when(deepSeek.generateTestData(input, settings)).thenReturn("{\"cases\":[]}");
+
+        String generated = router.generateTestData(input);
+
+        assertThat(generated).isEqualTo("{\"cases\":[]}");
+    }
 }

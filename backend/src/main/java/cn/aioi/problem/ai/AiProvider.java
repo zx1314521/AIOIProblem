@@ -10,4 +10,8 @@ public interface AiProvider {
     default String polishProblemStatement(ProblemInput input, AiTaskType taskType) {
         return input.text();
     }
+
+    default String generateTestData(ProblemInput input) {
+        throw new UnsupportedOperationException("AI data generation is not supported by this provider");
+    }
 }

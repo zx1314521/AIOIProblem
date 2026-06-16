@@ -59,4 +59,14 @@ public class AiProviderRouter implements AiProvider {
             return ruleBased.polishProblemStatement(input);
         }
     }
+
+    @Override
+    public String generateTestData(ProblemInput input) {
+        AiRuntimeSettings settings = settingsService.runtimeSettings(AiTaskType.DATA_GENERATION);
+        return switch (settings.provider()) {
+            case "deepseek" -> deepSeek.generateTestData(input, settings);
+            case "codex" -> codexCli.generateTestData(input, settings);
+            default -> throw new IllegalStateException("AI 数据生成需要使用 DeepSeek API 或 Codex CLI");
+        };
+    }
 }
